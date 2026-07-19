@@ -24,8 +24,8 @@ if arquivo_excel:
     elif not os.path.exists(CAMINHO_ROTEIRO):
         st.error(f"❌ Erro: O arquivo '{CAMINHO_ROTEIRO}' não foi encontrado no repositório do GitHub.")
     else:
-        # Lê a aba 'NOTIFICAÇÕES' conforme a estrutura real da sua planilha
-        df = pd.read_excel(arquivo_excel, sheet_name="NOTIFICAÇÕES")
+        # CORREÇÃO APLICADA: Lê automaticamente a primeira aba da planilha, independente do nome
+        df = pd.read_excel(arquivo_excel)
         
         # LIMPEZA: Remove linhas vazias baseando-se na coluna Nº (Notificação)
         df = df.dropna(subset=["Nº"])
@@ -40,15 +40,15 @@ if arquivo_excel:
             st.success("✨ Nenhum memorando pendente encontrado na planilha!")
         else:
             st.subheader(f"📋 Painel de Conferência ({len(df_pendentes)} memorandos identificados)")
-            st.dataframe(df_pendentes[["Nº", "STATUS", "SETOR NOTIFICADO", "NOME"]])
+            st.dataframe(df_pendentes[["Nº", "STATUS", "SETOR NOTIFICADO 02", "NOME"]])
             st.write("---")
             
             # Varre a planilha linha por linha tratando cada envio de forma isolada e separada
             for index, linha in df_pendentes.iterrows():
                 num_notif = str(int(linha.get("Nº", 0)))
-                num_memo = str(int(linha.get("Nº MEMO", 0))) if pd.notna(linha.get("Nº MEMO")) else "0000"
+                num_memo = str(int(linha.get("Nº Memo 02", 0))) if pd.notna(linha.get("Nº Memo 02")) else "0000"
                 paciente = str(linha.get("NOME", ""))
-                setor_destino = str(linha.get("SETOR NOTIFICADO", ""))
+                setor_destino = str(linha.get("GESTOR DE QUEM VAI RECEBER O GMAIL", ""))
                 email_destino = str(linha.get("EMAIL_SETOR", "")).strip()
                 
                 # Identifica dinamicamente se o horário atual pede Bom dia ou Boa tarde
@@ -56,7 +56,7 @@ if arquivo_excel:
                 saudacao = "Bom dia" if hora_atual < 12 else "Boa tarde"
                 
                 st.markdown(f"### 📄 Bloco de Envio Isolado: Notificação Nº {num_notif}")
-                st.caption(f"**Setor de Destino:** {setor_destino} | **E-mail Alvo:** {email_destino}")
+                st.caption(f"**Setor de Destino (PARA):** {setor_destino} | **E-mail Alvo:** {email_destino}")
                 
                 # Carrega o modelo do Word limpo para evitar contaminação de dados antigos
                 doc = Document(CAMINHO_MODELO)
@@ -93,7 +93,7 @@ if arquivo_excel:
                                     if tag in p.text:
                                         p.text = p.text.replace(tag, valor)
                                         
-                # Define o nome do arquivo exatamente no padrão rigoroso exigido por você
+                # Define o nome do arquivo exatamente no formato padronizado
                 nome_arquivo_padrao = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.docx"
                 doc.save(nome_arquivo_padrao)
                 
@@ -148,4 +148,3 @@ if arquivo_excel:
                 if os.path.exists(nome_arquivo_padrao):
                     os.remove(nome_arquivo_padrao)
                 st.markdown("---")
-
