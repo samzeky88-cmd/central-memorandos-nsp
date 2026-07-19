@@ -5,6 +5,7 @@ from email.message import EmailMessage
 import pandas as pd
 import streamlit as st
 from docx import Document
+from docx2pdf import convert  # Motor de conversão para PDF na nuvem
 
 # Configuração da página web do Streamlit
 st.set_page_config(page_title="NSP - Central de Memorandos", page_icon="🏥", layout="wide")
@@ -72,11 +73,10 @@ if arquivo_excel:
                 # Resgata o número do memo e limpa decimais
                 raw_memo = linha.get("Nº Memo 02", linha.get("Nº MEMO", "0000"))
                 if pd.notna(raw_memo) and str(raw_memo).strip() != "":
-                    num_memo = str(raw_memo).split('.')[0]
+                    num_memo = str(raw_memo).split('.')
                 else:
                     num_memo = "0000"
                 
-                # Monta a estrutura correta com o ano fixado caso falte
                 memo_formatado = f"{num_memo}/2026" if "/" not in num_memo else num_memo
                 
                 paciente = str(linha.get("NOME", "Paciente"))
@@ -116,19 +116,22 @@ if arquivo_excel:
                     "{{sugestao}}": sugestao_nsp
                 }
                 
-                # Regra para marcação de turnos
+                # Limpeza robusta para a marcação de turnos
                 turno = str(linha.get("TURNO", "")).strip().upper()
-                dados_dinamicos["{{m}}"] = "X" if "MANHÃ" in turno or "MANHA" in turno else " "
-                dados_dinamicos["{{t}}"] = "X" if "TARDE" in turno else " "
-                dados_dinamicos["{{n}}"] = "X" if "NOITE" in turno else " "
+                dados_dinamicos["{{m}}"] = "X" if "MANH" in turno else " "
+                dados_dinamicos["{{t}}"] = "X" if "TARD" in turno else " "
+                dados_dinamicos["{{n}}"] = "X" if "NOIT" in turno else " "
                 
-                # Varre parágrafos realizando as trocas
+                # Substituição preservando o Brasão original intacto
                 for p in doc.paragraphs:
                     if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
                         p.text = f"São Luís, {dt_extenso_br}"
-                    for tag, valor in dados_dinamicos.items():
-                        if tag in p.text:
-                            p.text = p.text.replace(tag, valor)
+                    else:
+                        for tag, valor in dados_dinamicos.items():
+                            if tag in p.text:
+                                for run in p.runs:
+                                    if tag in run.text:
+                                        run.text = run.text.replace(tag, valor)
                             
                 for tabela in doc.tables:
                     for linha_tab in tabela.rows:
@@ -136,51 +139,62 @@ if arquivo_excel:
                             for p in celula.paragraphs:
                                 if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
                                     p.text = f"São Luís, {dt_extenso_br}"
-                                for tag, valor in dados_dinamicos.items():
-                                    if tag in p.text:
-                                        p.text = p.text.replace(tag, valor)
+                                else:
+                                    for tag, valor in dados_dinamicos.items():
+                                        if tag in p.text:
+                                            for run in p.runs:
+                                                if tag in run.text:
+                                                    run.text = run.text.replace(tag, valor)
                                         
-                nome_arquivo_padrao = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.docx"
-                doc.save(nome_arquivo_padrao)
+                # Salva o arquivo em formato Word temporário
+                nome_word = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.docx"
+                nome_pdf = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.pdf"
+                doc.save(nome_word)
                 
-                col1, col2 = st.columns(2)
+                # 🌟 Cria a versão em PDF na nuvem
+                try:
+                    convert(nome_word, nome_pdf)
+                    pdf_pronto = True
+                except:
+                    pdf_pronto = False
                 
-                # BOTÃO DE CHECKAGEM MANUAL ANTES DE ENVIAR
-                with col1:
-                    with open(nome_arquivo_padrao, "rb") as f_word:
+                # Desenha os botões de ação divididos na tela
+                c1, c2, c3 = st.columns(3)
+                
+                with c1:
+                    with open(nome_word, "rb") as f_word:
                         st.download_button(
-                            label=f"📥 1º Baixar e Revisar Word (MEMO {num_memo})",
+                            label=f"📥 Baixar em Word",
                             data=f_word,
-                            file_name=nome_arquivo_padrao,
+                            file_name=nome_word,
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            key=f"dl_{index}"
+                            key=f"doc_{index}"
                         )
                         
-                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL (Estrutura linear limpa)
-                with col2:
-                    if st.button(f"🚀 2º Confirmar e Enviar E-mail (MEMO {num_memo})", key=f"btn_{index}"):
-                        if not email_destino or "@" not in email_destino:
-                            st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está em branco ou incorreto.")
-                        else:
-                            msg = EmailMessage()
-                            msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
-                            msg["From"] = "nsp.hospital@gmail.com"
-                            msg["To"] = email_destino
-                            
-                            msg.set_content(
-                                f"{saudacao} Prezados,\n\n"
-                                f"Seguem em anexo os documentos validados e emitidos pelo Núcleo de Segurança do Paciente (NSP) "
-                                f"referentes ao Memorando Nº {memo_formatado} da Notificação de Incidente Hospitalar Nº {num_notif}.\n\n"
-                                f"Solicitamos que o setor responsável analise e proceda com as tratativas necessárias utilizando a ficha limpa em anexo.\n\n"
-                                f"Atenciosamente,\n"
-                                f"NSP - Hospital da Cidade Dr. Jackson Lago."
+                with c2:
+                    if pdf_pronto:
+                        with open(nome_pdf, "rb") as f_pdf:
+                            st.download_button(
+                                label=f"📄 Baixar em PDF",
+                                data=f_pdf,
+                                file_name=nome_pdf,
+                                mime="application/pdf",
+                                key=f"pdf_{index}"
                             )
-                            
-                            # Leituras diretas imunes a recuo de espaços
-                            dados_memo = open(nome_arquivo_padrao, "rb").read()
-                            dados_roteiro = open(CAMINHO_ROTEIRO, "rb").read()
-                            
-                            msg.add_attachment(dados_memo, maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
-                            msg.add_attachment(dados_roteiro, maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
-                            
-                            # Envio simplificado direto
+                    else:
+                        st.caption("⚠️ PDF indisponível no momento.")
+                        
+                with c3:
+                    if st.button(f"🚀 Confirmar e Enviar E-mail", key=f"btn_{index}"):
+                        if not email_destino or "@" not in email_destino:
+                            st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está incorreto.")
+                        else:
+                            try:
+                                msg = EmailMessage()
+                                msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
+                                msg["From"] = st.secrets["EMAIL_USER"]
+                                msg["To"] = email_destino
+                                
+                                msg.set_content(
+                                    f"{saudacao} Prezados,\n\n"
+                                    f"Seguem em anexo os documentos validados e emitidos pelo Núcleo de Segurança do Paciente (NSP) "
