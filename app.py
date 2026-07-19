@@ -6,16 +6,13 @@ import pandas as pd
 import streamlit as st
 from docx import Document
 
-# Configuração da página web do Streamlit
 st.set_page_config(page_title="NSP - Central de Memorandos", page_icon="🏥", layout="wide")
 st.title("🏥 Central de Notificações e Memorandos - NSP")
 st.write("Hospital da Cidade Dr. Jackson Lago - São Luís")
 
-# Arquivos fixos que devem estar guardados na raiz do seu repositório do GitHub
 CAMINHO_MODELO = "modelo_memorando.docx"
 CAMINHO_ROTEIRO = "roteiro_tratativa.docx"
 
-# Função auxiliar para formatar datas vindo do Excel
 def formatar_data_br(valor_data):
     if pd.isna(valor_data) or str(valor_data).strip() == "":
         return ""
@@ -25,7 +22,6 @@ def formatar_data_br(valor_data):
     except:
         return str(valor_data)
 
-# Função auxiliar para formatar a data por extenso para a linha de São Luís
 def formatar_data_extenso(valor_data):
     if pd.isna(valor_data) or str(valor_data).strip() == "":
         return ""
@@ -40,89 +36,64 @@ def formatar_data_extenso(valor_data):
     except:
         return str(valor_data)
 
-# Função para realizar substituição limpando quebras invisíveis do Word (Mantém formatação e imagens)
-def substituir_texto_seguro(paragrafo, dicionario_dados, data_extenso=""):
-    texto_completo = paragrafo.text
-    
-    # Caso especial para a linha de São Luís
-    if "{{data_notificacao}}" in texto_completo and "São Luís" in texto_completo and data_extenso:
-        paragrafo.text = f"São Luís, {data_extenso}"
-        return
-
-    substituiu = False
-    for tag, valor in dicionario_dados.items():
-        if tag in texto_completo:
-            texto_completo = texto_completo.replace(tag, valor)
-            substituiu = True
-            
-    if substituiu:
-        # Se houver apenas um bloco de estilo (run), substitui direto mantendo fonte e tamanho
-        if len(paragrafo.runs) == 1:
-            paragrafo.runs[0].text = texto_completo
+# Substituição segura mantendo imagens e estilos
+def substituir_seguro(doc, dados_dinamicos, dt_extenso):
+    for p in doc.paragraphs:
+        if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
+            p.text = f"São Luís, {dt_extenso}"
         else:
-            # Junta e limpa as quebras internas geradas pelo Word sem corromper imagens
-            for i, run in enumerate(paragrafo.runs):
-                if i == 0:
-                    run.text = texto_completo
-                else:
-                    run.text = ""
+            for tag, valor in dados_dinamicos.items():
+                if tag in p.text:
+                    for run in p.runs:
+                        if tag in run.text:
+                            run.text = run.text.replace(tag, valor)
+                            
+    for tabela in doc.tables:
+        for linha_tab in tabela.rows:
+            for celula in linha_tab.cells:
+                for p in celula.paragraphs:
+                    if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
+                        p.text = f"São Luís, {dt_extenso}"
+                    else:
+                        for tag, valor in dados_dinamicos.items():
+                            if tag in p.text:
+                                for run in p.runs:
+                                    if tag in run.text:
+                                        run.text = run.text.replace(tag, valor)
 
-# Entrada da Planilha compactada via Upload
 arquivo_excel = st.file_uploader("1. Faça o upload da sua planilha de notificações (.xlsx)", type=["xlsx"])
 
 if arquivo_excel:
-    if not os.path.exists(CAMINHO_MODELO):
-        st.error(f"❌ Erro: O arquivo '{CAMINHO_MODELO}' não foi encontrado no repositório do GitHub.")
-    elif not os.path.exists(CAMINHO_ROTEIRO):
-        st.error(f"❌ Erro: O arquivo '{CAMINHO_ROTEIRO}' não foi encontrado no repositório do GitHub.")
+    if not os.path.exists(CAMINHO_MODELO) or not os.path.exists(CAMINHO_ROTEIRO):
+        st.error("❌ Arquivos de modelo não encontrados no GitHub.")
     else:
         df = pd.read_excel(arquivo_excel)
         df.columns = df.columns.astype(str).str.strip()
         df = df.dropna(subset=["Nº"])
         
-        if "STATUS" in df.columns:
-            df_pendentes = df[df["STATUS"].astype(str).str.strip().str.upper() == "PENDENTE"]
-        else:
-            df_pendentes = df
+        df_pendentes = df[df["STATUS"].astype(str).str.strip().str.upper() == "PENDENTE"] if "STATUS" in df.columns else df
             
         if len(df_pendentes) == 0:
-            st.success("✨ Nenhum memorando pendente encontrado na planilha!")
+            st.success("✨ Nenhum memorando pendente encontrado!")
         else:
-            st.subheader(f"📋 Painel de Conferência ({len(df_pendentes)} memorandos identificados)")
-            colunas_existentes = [c for c in ["Nº", "STATUS", "NOME"] if c in df_pendentes.columns]
-            st.dataframe(df_pendentes[colunas_existentes])
-            st.write("---")
+            st.subheader(f"📋 Painel de Conferência ({len(df_pendentes)} itens)")
+            st.dataframe(df_pendentes[[c for c in ["Nº", "STATUS", "NOME"] if c in df_pendentes.columns]])
             
             for index, linha in df_pendentes.iterrows():
                 num_notif = str(int(linha.get("Nº", 0)))
-                
-                # Resgata o número do memo e limpa decimais
                 raw_memo = linha.get("Nº Memo 02", linha.get("Nº MEMO", "0000"))
-                if pd.notna(raw_memo) and str(raw_memo).strip() != "":
-                    num_memo = str(raw_memo).split('.')[0]
-                else:
-                    num_memo = "0000"
-                
+                num_memo = str(raw_memo).split('.')[0] if pd.notna(raw_memo) else "0000"
                 memo_formatado = f"{num_memo}/2026" if "/" not in num_memo else num_memo
                 
                 paciente = str(linha.get("NOME", "Paciente"))
                 setor_destino = str(linha.get("GESTOR DE QUEM VAI RECEBER O GMAIL", linha.get("SETOR NOTIFICADO 02", "")))
                 email_destino = str(linha.get("EMAIL_SETOR", "")).strip()
                 
-                leito_paciente = str(linha.get("LEITO", ""))
-                setor_notif = str(linha.get("SETOR NOTIFICANTE", ""))
-                sugestao_nsp = str(linha.get("SUGESTÃO", ""))
-                
-                # Tratamento das datas
                 dt_ocorrencia_br = formatar_data_br(linha.get("DATA DA OCORRÊNCIA", ""))
                 dt_notificacao_br = formatar_data_br(linha.get("DATA DA NOTIFICAÇÃO", ""))
                 dt_extenso_br = formatar_data_extenso(linha.get("DATA DA NOTIFICAÇÃO", datetime.now()))
                 
-                hora_atual = datetime.now().hour
-                saudacao = "Bom dia" if hora_atual < 12 else "Boa tarde"
-                
-                st.markdown(f"### 📄 Bloco de Envio Isolado: Notificação Nº {num_notif}")
-                st.caption(f"**Setor de Destino (PARA):** {setor_destino} | **E-mail Alvo:** {email_destino}")
+                st.markdown(f"### 📄 Notificação Nº {num_notif}")
                 
                 doc = Document(CAMINHO_MODELO)
                 
@@ -135,61 +106,42 @@ if arquivo_excel:
                     "{{tipo_incidente}}": str(linha.get("TIPO DE INCIDENTE", "")),
                     "{{classificacao_incidente}}": str(linha.get("CLASSIFICAÇÃO DO INCIDENTE", "")),
                     "{{descricao_notificacao}}": str(linha.get("DESCRIÇÃO DA NOTIFICAÇÃO", "")),
-                    "{{setor_notificante}}": setor_notif,
+                    "{{setor_notificante}}": str(linha.get("SETOR NOTIFICANTE", "")),
                     "{{setor_destino}}": setor_destino,
                     "{{nome_paciente}}": paciente,
-                    "{{leito}}": leito_paciente,
-                    "{{sugestao}}": sugestao_nsp
+                    "{{leito}}": str(linha.get("LEITO", "")),
+                    "{{sugestao}}": str(linha.get("SUGESTÃO", ""))
                 }
                 
-                # Limpeza robusta para a marcação de turnos (Trata X dentro do parênteses)
+                # Marcação de turnos precisa do espaço idêntico ao modelo do seu Word
                 turno = str(linha.get("TURNO", "")).strip().upper()
-                dados_dinamicos["( {{m}} )"] = "( X )" if "MANH" in turno else "(   )"
-                dados_dinamicos["( {{t}} )"] = "( X )" if "TARD" in turno else "(   )"
-                dados_dinamicos["( {{n}} )"] = "( X )" if "NOIT" in turno else "(   )"
+                dados_dinamicos["{{m}}"] = "X" if "MANH" in turno else " "
+                dados_dinamicos["{{t}}"] = "X" if "TARD" in turno else " "
+                dados_dinamicos["{{n}}"] = "X" if "NOIT" in turno else " "
                 
-                # Executa a varredura aplicando o motor de fusão inteligente
-                for p in doc.paragraphs:
-                    substituir_texto_seguro(p, dados_dinamicos, dt_extenso_br)
-                            
-                for tabela in doc.tables:
-                    for linha_tab in tabela.rows:
-                        for celula in linha_tab.cells:
-                            for p in celula.paragraphs:
-                                substituir_texto_seguro(p, dados_dinamicos, dt_extenso_br)
+                substituir_seguro(doc, dados_dinamicos, dt_extenso_br)
                                         
-                # Salva o arquivo Word padronizado definitivo
                 nome_word = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.docx"
                 doc.save(nome_word)
                 
-                col_esquerda, col_direita = st.columns(2)
-                
-                with col_esquerda:
-                    st.download_button(
-                        label="📥 Baixar Memorando em Word",
-                        data=open(nome_word, "rb").read(),
-                        file_name=nome_word,
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"doc_{index}"
-                    )
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(label="📥 Baixar em Word", data=open(nome_word, "rb").read(), file_name=nome_word, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key=f"d_{index}")
+                with col2:
+                    if st.button("🚀 Enviar E-mail", key=f"b_{index}"):
+                        msg = EmailMessage()
+                        msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
+                        msg["From"] = st.secrets["EMAIL_USER"]
+                        msg["To"] = email_destino
+                        msg.set_content(f"Prezados,\n\nSeguem em anexo os documentos do Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNSP.")
+                        msg.add_attachment(open(nome_word, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_word)
+                        msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
                         
-                with col_direita:
-                    if st.button("🚀 Confirmar e Enviar E-mail", key=f"btn_{index}"):
-                        if not email_destino or "@" not in email_destino:
-                            st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está incorreto.")
-                        else:
-                            msg = EmailMessage()
-                            msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
-                            msg["From"] = st.secrets["EMAIL_USER"]
-                            msg["To"] = email_destino
-                            
-                            corpo_texto = f"{saudacao} Prezados,\n\nSeguem em anexo os documentos validados pelo NSP referentes ao Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNúcleo de Segurança do Paciente."
-                            msg.set_content(corpo_texto)
-                            
-                            msg.add_attachment(open(nome_word, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_word)
-                            msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
-                            
-                            smtp = smtplib.SMTP_SSL("://gmail.com", 465)
+                        with smtplib.SMTP_SSL("://gmail.com", 465) as smtp:
                             smtp.login(st.secrets["EMAIL_USER"], st.secrets["EMAIL_PASSWORD"])
                             smtp.send_message(msg)
-                            smtp.quit()
+                        st.success("✅ Enviado com sucesso!")
+                        
+                if os.path.exists(nome_word):
+                    os.remove(nome_word)
+                st.markdown("---")
