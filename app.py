@@ -23,11 +23,11 @@ def formatar_data_br(valor_data):
         dt = pd.to_datetime(valor_data)
         return dt.strftime("%d/%m/%Y")
     except:
-        str_data = str(valor_data).split(' ')[0]
+        str_data = str(valor_data).split(' ')
         if '-' in str_data:
             partes = str_data.split('-')
             if len(partes) == 3:
-                return f"{partes[2]}/{partes[1]}/{partes[0]}"
+                return f"{partes}/{partes}/{partes}"
         return str_data
 
 # Função auxiliar para formatar a data por extenso para a linha de São Luís
@@ -161,12 +161,18 @@ if arquivo_excel:
                             key=f"dl_{index}"
                         )
                         
-                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL (Alinhamento em linha reta simplificado)
+                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL
                 with col2:
                     if st.button(f"🚀 2º Confirmar e Enviar E-mail (MEMO {num_memo})", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
                             st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está em branco ou incorreto.")
                         else:
+                            # CORREÇÃO: Lê e armazena os arquivos em variáveis ANTES de abrir o try do envio
+                            with open(nome_arquivo_padrao, "rb") as f1:
+                                dados_f1 = f1.read()
+                            with open(CAMINHO_ROTEIRO, "rb") as f2:
+                                dados_f2 = f2.read()
+                                
                             try:
                                 msg = EmailMessage()
                                 msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
@@ -182,7 +188,4 @@ if arquivo_excel:
                                     f"NSP - Hospital da Cidade Dr. Jackson Lago."
                                 )
                                 
-                                # Leitura linear dos arquivos para evitar erros de espaços
-                                f1 = open(nome_arquivo_padrao, "rb")
-                                dados_f1 = f1.read()
-                                f1.close()
+                                # Anexa os arquivos usando os dados guardados em memória
