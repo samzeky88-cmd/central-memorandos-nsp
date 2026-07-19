@@ -5,7 +5,6 @@ from email.message import EmailMessage
 import pandas as pd
 import streamlit as st
 from docx import Document
-from docx2pdf import convert
 
 # Configuração da página web do Streamlit
 st.set_page_config(page_title="NSP - Central de Memorandos", page_icon="🏥", layout="wide")
@@ -146,45 +145,25 @@ if arquivo_excel:
                                                 if tag in run.text:
                                                     run.text = run.text.replace(tag, valor)
                                         
-                # Salva o arquivo em formato Word temporário
+                # Salva o arquivo Word padronizado definitivo
                 nome_word = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.docx"
-                nome_pdf = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.pdf"
                 doc.save(nome_word)
                 
-                # Cria a versão em PDF na nuvem
-                try:
-                    convert(nome_word, nome_pdf)
-                    pdf_pronto = True
-                except:
-                    pdf_pronto = False
+                # Interface limpa em duas colunas sem riscos de indentação
+                col_esquerda, col_direita = st.columns(2)
                 
-                # Desenha os botões de ação divididos na tela
-                c1, c2, c3 = st.columns(3)
-                
-                with c1:
-                    with open(nome_word, "rb") as f_word:
-                        st.download_button(
-                            label="📥 Baixar em Word",
-                            data=f_word,
-                            file_name=nome_word,
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            key=f"doc_{index}"
-                        )
+                # Coluna 1: Download Manual do Word Revisado e com Brasão mantido
+                with col_esquerda:
+                    st.download_button(
+                        label="📥 Baixar Memorando em Word",
+                        data=open(nome_word, "rb").read(),
+                        file_name=nome_word,
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"doc_{index}"
+                    )
                         
-                with c2:
-                    if pdf_pronto:
-                        with open(nome_pdf, "rb") as f_pdf:
-                            st.download_button(
-                                label="📄 Baixar em PDF",
-                                data=f_pdf,
-                                file_name=nome_pdf,
-                                mime="application/pdf",
-                                key=f"pdf_{index}"
-                            )
-                    else:
-                        st.caption("⚠️ PDF indisponível.")
-                        
-                with c3:
+                # Coluna 2: Botão de Envio de E-mail Direto
+                with col_direita:
                     if st.button("🚀 Confirmar e Enviar E-mail", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
                             st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está incorreto.")
@@ -195,7 +174,13 @@ if arquivo_excel:
                                 msg["From"] = st.secrets["EMAIL_USER"]
                                 msg["To"] = email_destino
                                 
-                                corpo_texto = f"{saudacao} Prezados,\n\nSeguem em anexo os documentos referentes ao Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNSP."
+                                corpo_texto = f"{saudacao} Prezados,\n\nSeguem em anexo os documentos validados pelo NSP referentes ao Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNúcleo de Segurança do Paciente."
                                 msg.set_content(corpo_texto)
                                 
-                                if pdf_pronto:
+                                # Anexa os dois arquivos Word de forma direta e segura
+                                msg.add_attachment(open(nome_word, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_word)
+                                msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
+                                
+                                with smtplib.SMTP_SSL("://gmail.com", 465) as smtp:
+                                    smtp.login(st.secrets["EMAIL_USER"], st.secrets["EMAIL_PASSWORD"])
+                                    smtp.send_message(msg)
