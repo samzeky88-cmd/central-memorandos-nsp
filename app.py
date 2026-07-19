@@ -40,6 +40,33 @@ def formatar_data_extenso(valor_data):
     except:
         return str(valor_data)
 
+# Função para realizar substituição limpando quebras invisíveis do Word (Mantém formatação e imagens)
+def substituir_texto_seguro(paragrafo, dicionario_dados, data_extenso=""):
+    texto_completo = paragrafo.text
+    
+    # Caso especial para a linha de São Luís
+    if "{{data_notificacao}}" in texto_completo and "São Luís" in texto_completo and data_extenso:
+        paragrafo.text = f"São Luís, {data_extenso}"
+        return
+
+    substituiu = False
+    for tag, valor in dicionario_dados.items():
+        if tag in texto_completo:
+            texto_completo = texto_completo.replace(tag, valor)
+            substituiu = True
+            
+    if substituiu:
+        # Se houver apenas um bloco de estilo (run), substitui direto mantendo fonte e tamanho
+        if len(paragrafo.runs) == 1:
+            paragrafo.runs[0].text = texto_completo
+        else:
+            # Junta e limpa as quebras internas geradas pelo Word sem corromper imagens
+            for i, run in enumerate(paragrafo.runs):
+                if i == 0:
+                    run.text = texto_completo
+                else:
+                    run.text = ""
+
 # Entrada da Planilha compactada via Upload
 arquivo_excel = st.file_uploader("1. Faça o upload da sua planilha de notificações (.xlsx)", type=["xlsx"])
 
@@ -115,41 +142,26 @@ if arquivo_excel:
                     "{{sugestao}}": sugestao_nsp
                 }
                 
-                # Limpeza robusta para a marcação de turnos
+                # Limpeza robusta para a marcação de turnos (Trata X dentro do parênteses)
                 turno = str(linha.get("TURNO", "")).strip().upper()
-                dados_dinamicos["{{m}}"] = "X" if "MANH" in turno else " "
-                dados_dinamicos["{{t}}"] = "X" if "TARD" in turno else " "
-                dados_dinamicos["{{n}}"] = "X" if "NOIT" in turno else " "
+                dados_dinamicos["( {{m}} )"] = "( X )" if "MANH" in turno else "(   )"
+                dados_dinamicos["( {{t}} )"] = "( X )" if "TARD" in turno else "(   )"
+                dados_dinamicos["( {{n}} )"] = "( X )" if "NOIT" in turno else "(   )"
                 
-                # Substituição preservando o Brasão original intacto
+                # Executa a varredura aplicando o motor de fusão inteligente
                 for p in doc.paragraphs:
-                    if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
-                        p.text = f"São Luís, {dt_extenso_br}"
-                    else:
-                        for tag, valor in dados_dinamicos.items():
-                            if tag in p.text:
-                                for run in p.runs:
-                                    if tag in run.text:
-                                        run.text = run.text.replace(tag, valor)
+                    substituir_texto_seguro(p, dados_dinamicos, dt_extenso_br)
                             
                 for tabela in doc.tables:
                     for linha_tab in tabela.rows:
                         for celula in linha_tab.cells:
                             for p in celula.paragraphs:
-                                if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
-                                    p.text = f"São Luís, {dt_extenso_br}"
-                                else:
-                                    for tag, valor in dados_dinamicos.items():
-                                        if tag in p.text:
-                                            for run in p.runs:
-                                                if tag in run.text:
-                                                    run.text = run.text.replace(tag, valor)
+                                substituir_texto_seguro(p, dados_dinamicos, dt_extenso_br)
                                         
                 # Salva o arquivo Word padronizado definitivo
                 nome_word = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.docx"
                 doc.save(nome_word)
                 
-                # Interface limpa em duas colunas sem riscos de indentação
                 col_esquerda, col_direita = st.columns(2)
                 
                 with col_esquerda:
@@ -174,14 +186,10 @@ if arquivo_excel:
                             corpo_texto = f"{saudacao} Prezados,\n\nSeguem em anexo os documentos validados pelo NSP referentes ao Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNúcleo de Segurança do Paciente."
                             msg.set_content(corpo_texto)
                             
-                            # Anexa os dois arquivos Word de forma direta e segura
                             msg.add_attachment(open(nome_word, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_word)
                             msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
                             
-                            # Conexão direta simplificada sem estruturas aninhadas
                             smtp = smtplib.SMTP_SSL("://gmail.com", 465)
                             smtp.login(st.secrets["EMAIL_USER"], st.secrets["EMAIL_PASSWORD"])
                             smtp.send_message(msg)
                             smtp.quit()
-                            st.success(f"✅ Enviado com sucesso para: {email_destino}!")
-                                
