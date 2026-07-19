@@ -92,7 +92,7 @@ if arquivo_excel:
                 setor_notif = str(linha.get("SETOR NOTIFICANTE", ""))
                 sugestao_nsp = str(linha.get("SUGESTÃO", ""))
                 
-                # Tratamento robusto das datas
+                # Tratamento das datas
                 dt_ocorrencia_br = formatar_data_br(linha.get("DATA DA OCORRÊNCIA", ""))
                 dt_notificacao_br = formatar_data_br(linha.get("DATA DA NOTIFICAÇÃO", ""))
                 dt_extenso_br = formatar_data_extenso(linha.get("DATA DA NOTIFICAÇÃO", datetime.now()))
@@ -121,7 +121,7 @@ if arquivo_excel:
                     "{{sugestao}}": sugestao_nsp
                 }
                 
-                # Regra estrita para marcação de turnos
+                # Regra para marcação de turnos
                 turno = str(linha.get("TURNO", "")).strip().upper()
                 dados_dinamicos["{{m}}"] = "X" if "MANHÃ" in turno or "MANHA" in turno else " "
                 dados_dinamicos["{{t}}"] = "X" if "TARDE" in turno else " "
@@ -150,6 +150,7 @@ if arquivo_excel:
                 
                 col1, col2 = st.columns(2)
                 
+                # BOTÃO DE CHECKAGEM MANUAL ANTES DE ENVIAR
                 with col1:
                     with open(nome_arquivo_padrao, "rb") as f_word:
                         st.download_button(
@@ -160,10 +161,11 @@ if arquivo_excel:
                             key=f"dl_{index}"
                         )
                         
+                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL (Alinhamento em linha reta simplificado)
                 with col2:
                     if st.button(f"🚀 2º Confirmar e Enviar E-mail (MEMO {num_memo})", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
-                            st.error(f"❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está em branco ou incorreto.")
+                            st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está em branco ou incorreto.")
                         else:
                             try:
                                 msg = EmailMessage()
@@ -180,7 +182,7 @@ if arquivo_excel:
                                     f"NSP - Hospital da Cidade Dr. Jackson Lago."
                                 )
                                 
-                                with open(nome_arquivo_padrao, "rb") as f_anexo1:
-                                    msg.add_attachment(f_anexo1.read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
-                                    
-                                with open(CAMINHO_ROTEIRO, "rb") as f_anexo2:
+                                # Leitura linear dos arquivos para evitar erros de espaços
+                                f1 = open(nome_arquivo_padrao, "rb")
+                                dados_f1 = f1.read()
+                                f1.close()
