@@ -5,7 +5,7 @@ from email.message import EmailMessage
 import pandas as pd
 import streamlit as st
 from docx import Document
-from docx2pdf import convert  # Motor de conversão para PDF na nuvem
+from docx2pdf import convert
 
 # Configuração da página web do Streamlit
 st.set_page_config(page_title="NSP - Central de Memorandos", page_icon="🏥", layout="wide")
@@ -73,7 +73,7 @@ if arquivo_excel:
                 # Resgata o número do memo e limpa decimais
                 raw_memo = linha.get("Nº Memo 02", linha.get("Nº MEMO", "0000"))
                 if pd.notna(raw_memo) and str(raw_memo).strip() != "":
-                    num_memo = str(raw_memo).split('.')
+                    num_memo = str(raw_memo).split('.')[0]
                 else:
                     num_memo = "0000"
                 
@@ -151,7 +151,7 @@ if arquivo_excel:
                 nome_pdf = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.pdf"
                 doc.save(nome_word)
                 
-                # 🌟 Cria a versão em PDF na nuvem
+                # Cria a versão em PDF na nuvem
                 try:
                     convert(nome_word, nome_pdf)
                     pdf_pronto = True
@@ -164,7 +164,7 @@ if arquivo_excel:
                 with c1:
                     with open(nome_word, "rb") as f_word:
                         st.download_button(
-                            label=f"📥 Baixar em Word",
+                            label="📥 Baixar em Word",
                             data=f_word,
                             file_name=nome_word,
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -175,17 +175,17 @@ if arquivo_excel:
                     if pdf_pronto:
                         with open(nome_pdf, "rb") as f_pdf:
                             st.download_button(
-                                label=f"📄 Baixar em PDF",
+                                label="📄 Baixar em PDF",
                                 data=f_pdf,
                                 file_name=nome_pdf,
                                 mime="application/pdf",
                                 key=f"pdf_{index}"
                             )
                     else:
-                        st.caption("⚠️ PDF indisponível no momento.")
+                        st.caption("⚠️ PDF indisponível.")
                         
                 with c3:
-                    if st.button(f"🚀 Confirmar e Enviar E-mail", key=f"btn_{index}"):
+                    if st.button("🚀 Confirmar e Enviar E-mail", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
                             st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está incorreto.")
                         else:
@@ -195,6 +195,7 @@ if arquivo_excel:
                                 msg["From"] = st.secrets["EMAIL_USER"]
                                 msg["To"] = email_destino
                                 
-                                msg.set_content(
-                                    f"{saudacao} Prezados,\n\n"
-                                    f"Seguem em anexo os documentos validados e emitidos pelo Núcleo de Segurança do Paciente (NSP) "
+                                corpo_texto = f"{saudacao} Prezados,\n\nSeguem em anexo os documentos referentes ao Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNSP."
+                                msg.set_content(corpo_texto)
+                                
+                                if pdf_pronto:
