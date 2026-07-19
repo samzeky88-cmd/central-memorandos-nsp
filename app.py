@@ -156,7 +156,7 @@ if arquivo_excel:
                             key=f"dl_{index}"
                         )
                         
-                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL
+                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL (Reescrito sem blocos complexos de arquivos)
                 with col2:
                     if st.button(f"🚀 2º Confirmar e Enviar E-mail (MEMO {num_memo})", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
@@ -177,8 +177,7 @@ if arquivo_excel:
                                     f"NSP - Hospital da Cidade Dr. Jackson Lago."
                                 )
                                 
-                                # Estrutura clássica de anexação automática sem falhas de espaços
-                                with open(nome_arquivo_padrao, "rb") as f1:
-                                    msg.add_attachment(f1.read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
-                                    
-                                with open(CAMINHO_ROTEIRO, "rb") as f2:
+                                # Leitura direta em uma única linha plana (Imune a erros de espaço)
+                                msg.add_attachment(open(nome_arquivo_padrao, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
+                                msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
+                                
