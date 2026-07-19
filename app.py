@@ -147,16 +147,19 @@ if arquivo_excel:
                 
                 # BOTÃO DE CHECKAGEM MANUAL ANTES DE ENVIAR
                 with col1:
-                    with open(nome_arquivo_padrao, "rb") as f_word:
-                        st.download_button(
-                            label=f"📥 1º Baixar e Revisar Word (MEMO {num_memo})",
-                            data=f_word,
-                            file_name=nome_arquivo_padrao,
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            key=f"dl_{index}"
-                        )
+                    try:
+                        with open(nome_arquivo_padrao, "rb") as f_word:
+                            st.download_button(
+                                label=f"📥 1º Baixar e Revisar Word (MEMO {num_memo})",
+                                data=f_word,
+                                file_name=nome_arquivo_padrao,
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                key=f"dl_{index}"
+                            )
+                    except:
+                        st.error("Erro ao gerar botão de download.")
                         
-                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL (Reescrito sem blocos complexos de arquivos)
+                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL
                 with col2:
                     if st.button(f"🚀 2º Confirmar e Enviar E-mail (MEMO {num_memo})", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
@@ -177,7 +180,8 @@ if arquivo_excel:
                                     f"NSP - Hospital da Cidade Dr. Jackson Lago."
                                 )
                                 
-                                # Leitura direta em uma única linha plana (Imune a erros de espaço)
-                                msg.add_attachment(open(nome_arquivo_padrao, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
-                                msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
+                                # Leitura direta sem estruturas com risco de indentação
+                                dados_memo = open(nome_arquivo_padrao, "rb").read()
+                                dados_roteiro = open(CAMINHO_ROTEIRO, "rb").read()
                                 
+                                msg.add_attachment(dados_memo, maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
