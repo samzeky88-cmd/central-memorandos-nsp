@@ -152,7 +152,6 @@ if arquivo_excel:
                 # Interface limpa em duas colunas sem riscos de indentação
                 col_esquerda, col_direita = st.columns(2)
                 
-                # Coluna 1: Download Manual do Word Revisado e com Brasão mantido
                 with col_esquerda:
                     st.download_button(
                         label="📥 Baixar Memorando em Word",
@@ -162,25 +161,27 @@ if arquivo_excel:
                         key=f"doc_{index}"
                     )
                         
-                # Coluna 2: Botão de Envio de E-mail Direto
                 with col_direita:
                     if st.button("🚀 Confirmar e Enviar E-mail", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
                             st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está incorreto.")
                         else:
-                            try:
-                                msg = EmailMessage()
-                                msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
-                                msg["From"] = st.secrets["EMAIL_USER"]
-                                msg["To"] = email_destino
+                            msg = EmailMessage()
+                            msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
+                            msg["From"] = st.secrets["EMAIL_USER"]
+                            msg["To"] = email_destino
+                            
+                            corpo_texto = f"{saudacao} Prezados,\n\nSeguem em anexo os documentos validados pelo NSP referentes ao Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNúcleo de Segurança do Paciente."
+                            msg.set_content(corpo_texto)
+                            
+                            # Anexa os dois arquivos Word de forma direta e segura
+                            msg.add_attachment(open(nome_word, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_word)
+                            msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
+                            
+                            # Conexão direta simplificada sem estruturas aninhadas
+                            smtp = smtplib.SMTP_SSL("://gmail.com", 465)
+                            smtp.login(st.secrets["EMAIL_USER"], st.secrets["EMAIL_PASSWORD"])
+                            smtp.send_message(msg)
+                            smtp.quit()
+                            st.success(f"✅ Enviado com sucesso para: {email_destino}!")
                                 
-                                corpo_texto = f"{saudacao} Prezados,\n\nSeguem em anexo os documentos validados pelo NSP referentes ao Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNúcleo de Segurança do Paciente."
-                                msg.set_content(corpo_texto)
-                                
-                                # Anexa os dois arquivos Word de forma direta e segura
-                                msg.add_attachment(open(nome_word, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_word)
-                                msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
-                                
-                                with smtplib.SMTP_SSL("://gmail.com", 465) as smtp:
-                                    smtp.login(st.secrets["EMAIL_USER"], st.secrets["EMAIL_PASSWORD"])
-                                    smtp.send_message(msg)
