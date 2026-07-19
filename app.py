@@ -15,6 +15,38 @@ st.write("Hospital da Cidade Dr. Jackson Lago - São Luís")
 CAMINHO_MODELO = "modelo_memorando.docx"
 CAMINHO_ROTEIRO = "roteiro_tratativa.docx"
 
+# Função auxiliar para formatar datas vindo do Excel
+def formatar_data_br(valor_data):
+    if pd.isna(valor_data) or str(valor_data).strip() == "":
+        return ""
+    try:
+        # Se vier como carimbo de data/hora do pandas ou datetime
+        dt = pd.to_datetime(valor_data)
+        return dt.strftime("%d/%m/%Y")
+    except:
+        # Se falhar, tenta limpar strings que venham com horário grudado
+        str_data = str(valor_data).split(' ')[0]
+        if '-' in str_data:
+            partes = str_data.split('-')
+            if len(partes) == 3 and len(partes[0]) == 4: # Formato AAAA-MM-DD
+                return f"{partes[2]}/{partes[1]}/{partes[0]}"
+        return str_data
+
+# Função auxiliar para formatar a data por extenso para a linha de São Luís
+def formatar_data_extenso(valor_data):
+    if pd.isna(valor_data) or str(valor_data).strip() == "":
+        return ""
+    meses = {
+        1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril",
+        5: "maio", 6: "junho", 7: "julho", 8: "agosto",
+        9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
+    }
+    try:
+        dt = pd.to_datetime(valor_data)
+        return f"{dt.day} de {meses[dt.month]} de {dt.year}"
+    except:
+        return str(valor_data)
+
 # Entrada da Planilha compactada via Upload
 arquivo_excel = st.file_uploader("1. Faça o upload da sua planilha de notificações (.xlsx)", type=["xlsx"])
 
@@ -24,16 +56,10 @@ if arquivo_excel:
     elif not os.path.exists(CAMINHO_ROTEIRO):
         st.error(f"❌ Erro: O arquivo '{CAMINHO_ROTEIRO}' não foi encontrado no repositório do GitHub.")
     else:
-        # Lê automaticamente a primeira aba da planilha, independente do nome
         df = pd.read_excel(arquivo_excel)
-        
-        # Limpa os nomes das colunas removendo espaços extras invisíveis
         df.columns = df.columns.astype(str).str.strip()
-        
-        # LIMPEZA: Remove linhas vazias baseando-se na coluna Nº (Notificação)
         df = df.dropna(subset=["Nº"])
         
-        # FILTRO: Filtra e exibe apenas o que está marcado estritamente como 'Pendente'
         if "STATUS" in df.columns:
             df_pendentes = df[df["STATUS"].astype(str).str.strip().str.upper() == "PENDENTE"]
         else:
@@ -47,35 +73,45 @@ if arquivo_excel:
             st.dataframe(df_pendentes[colunas_existentes])
             st.write("---")
             
-            # Varre a planilha linha por linha tratando cada envio de forma isolada
             for index, linha in df_pendentes.iterrows():
                 num_notif = str(int(linha.get("Nº", 0)))
-                num_memo = str(int(linha.get("Nº Memo 02", linha.get("Nº MEMO", 0)))) if pd.notna(linha.get("Nº Memo 02")) or pd.notna(linha.get("Nº MEMO")) else "0000"
+                
+                # Resgata o número do memo; remove pontos decimais se houver
+                raw_memo = linha.get("Nº Memo 02", linha.get("Nº MEMO", "0000"))
+                if pd.notna(raw_memo) and str(raw_memo).strip() != "":
+                    num_memo = str(raw_memo).split('.')[0]
+                else:
+                    num_memo = "0000"
+                
+                # Monta a estrutura correta exigida com o ano fixado caso falte
+                memo_formatado = f"{num_memo}/2026" if "/" not in num_memo else num_memo
+                
                 paciente = str(linha.get("NOME", "Paciente"))
                 setor_destino = str(linha.get("GESTOR DE QUEM VAI RECEBER O GMAIL", linha.get("SETOR NOTIFICADO 02", "")))
                 email_destino = str(linha.get("EMAIL_SETOR", "")).strip()
                 
-                # Coleta as novas informações adicionadas baseadas na planilha
                 leito_paciente = str(linha.get("LEITO", ""))
                 setor_notif = str(linha.get("SETOR NOTIFICANTE", ""))
                 sugestao_nsp = str(linha.get("SUGESTÃO", ""))
                 
-                # Identifica dinamicamente se o horário atual pede Bom dia ou Boa tarde
+                # Tratamento robusto das datas para o padrão nacional brasileiro
+                dt_ocorrencia_br = formatar_data_br(linha.get("DATA DA OCORRÊNCIA", ""))
+                dt_notificacao_br = formatar_data_br(linha.get("DATA DA NOTIFICAÇÃO", ""))
+                dt_extenso_br = formatar_data_extenso(linha.get("DATA DA NOTIFICAÇÃO", datetime.now()))
+                
                 hora_atual = datetime.now().hour
                 saudacao = "Bom dia" if hora_atual < 12 else "Boa tarde"
                 
                 st.markdown(f"### 📄 Bloco de Envio Isolado: Notificação Nº {num_notif}")
                 st.caption(f"**Setor de Destino (PARA):** {setor_destino} | **E-mail Alvo:** {email_destino}")
                 
-                # Carrega o modelo do Word limpo
                 doc = Document(CAMINHO_MODELO)
                 
-                # Mapeamento completo com todas as tags do documento oficial
                 dados_dinamicos = {
-                    "{{numero_memorando}}": num_memo,
+                    "{{numero_memorando}}": memo_formatado,
                     "{{notificacao_n}}": num_notif,
-                    "{{data_ocorrencia}}": str(linha.get("DATA DA OCORRÊNCIA", "")).split(' ')[0],
-                    "{{data_notificacao}}": str(linha.get("DATA DA NOTIFICAÇÃO", "")).split(' ')[0],
+                    "{{data_ocorrencia}}": dt_ocorrencia_br,
+                    "{{data_notificacao}}": dt_notificacao_br,
                     "{{localizacao}}": str(linha.get("ONDE OCORREU INCIDENTE", linha.get("LOCALIZAÇÃO", ""))),
                     "{{tipo_incidente}}": str(linha.get("TIPO DE INCIDENTE", "")),
                     "{{classificacao_incidente}}": str(linha.get("CLASSIFICAÇÃO DO INCIDENTE", "")),
@@ -87,34 +123,36 @@ if arquivo_excel:
                     "{{sugestao}}": sugestao_nsp
                 }
                 
-                # Trata a marcação automática dos turnos
+                # Regra estrita para marcação de caixas de seleção de Turnos com o X maiúsculo
                 turno = str(linha.get("TURNO", "")).strip().upper()
-                dados_dinamicos["{{m}}"] = "X" if "MANHÃ" in turno else " "
+                dados_dinamicos["{{m}}"] = "X" if "MANHÃ" in turno or "MANHA" in turno else " "
                 dados_dinamicos["{{t}}"] = "X" if "TARDE" in turno else " "
                 dados_dinamicos["{{n}}"] = "X" if "NOITE" in turno else " "
                 
-                # Substitui os textos nos parágrafos comuns do Word
+                # Varre parágrafos realizando as trocas
                 for p in doc.paragraphs:
+                    # Correção da linha da cidade em tempo real
+                    if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
+                        p.text = f"São Luís, {dt_extenso_br}"
                     for tag, valor in dados_dinamicos.items():
                         if tag in p.text:
                             p.text = p.text.replace(tag, valor)
                             
-                # Substitui os textos caso estejam inseridos dentro de tabelas
                 for tabela in doc.tables:
                     for linha_tab in tabela.rows:
                         for celula in linha_tab.cells:
                             for p in celula.paragraphs:
+                                if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
+                                    p.text = f"São Luís, {dt_extenso_br}"
                                 for tag, valor in dados_dinamicos.items():
                                     if tag in p.text:
                                         p.text = p.text.replace(tag, valor)
                                         
-                # Define o nome do arquivo exatamente no formato padronizado
                 nome_arquivo_padrao = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.docx"
                 doc.save(nome_arquivo_padrao)
                 
                 col1, col2 = st.columns(2)
                 
-                # BOTÃO DE CHECKAGEM MANUAL ANTES DE ENVIAR
                 with col1:
                     with open(nome_arquivo_padrao, "rb") as f_word:
                         st.download_button(
@@ -125,7 +163,6 @@ if arquivo_excel:
                             key=f"dl_{index}"
                         )
                         
-                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL
                 with col2:
                     if st.button(f"🚀 2º Confirmar e Enviar E-mail (MEMO {num_memo})", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
@@ -140,26 +177,10 @@ if arquivo_excel:
                                 msg.set_content(
                                     f"{saudacao} Prezados,\n\n"
                                     f"Seguem em anexo os documentos validados e emitidos pelo Núcleo de Segurança do Paciente (NSP) "
-                                    f"referentes ao Memorando Nº {num_memo} da Notificação de Incidente Hospitalar Nº {num_notif}.\n\n"
+                                    f"referentes ao Memorando Nº {memo_formatado} da Notificação de Incidente Hospitalar Nº {num_notif}.\n\n"
                                     f"Solicitamos que o setor responsável analise e proceda com as tratativas necessárias utilizando a ficha limpa em anexo.\n\n"
                                     f"Atenciosamente,\n"
                                     f"NSP - Hospital da Cidade Dr. Jackson Lago."
                                 )
                                 
                                 with open(nome_arquivo_padrao, "rb") as f_anexo1:
-                                    msg.add_attachment(f_anexo1.read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
-                                    
-                                with open(CAMINHO_ROTEIRO, "rb") as f_anexo2:
-                                    msg.add_attachment(f_anexo2.read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
-                                    
-                                with smtplib.SMTP_SSL("://gmail.com", 465) as smtp:
-                                    smtp.login(st.secrets["EMAIL_USER"], st.secrets["EMAIL_PASSWORD"])
-                                    smtp.send_message(msg)
-                                    
-                                st.success(f"✅ Memorando Nº {num_memo} enviado com sucesso para: {email_destino}!")
-                            except Exception as e:
-                                st.error(f"❌ Erro técnico ao tentar enviar este e-mail: {e}")
-                                
-                if os.path.exists(nome_arquivo_padrao):
-                    os.remove(nome_arquivo_padrao)
-                st.markdown("---")
