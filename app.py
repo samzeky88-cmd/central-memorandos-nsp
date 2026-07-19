@@ -147,41 +147,40 @@ if arquivo_excel:
                 
                 # BOTÃO DE CHECKAGEM MANUAL ANTES DE ENVIAR
                 with col1:
-                    try:
-                        with open(nome_arquivo_padrao, "rb") as f_word:
-                            st.download_button(
-                                label=f"📥 1º Baixar e Revisar Word (MEMO {num_memo})",
-                                data=f_word,
-                                file_name=nome_arquivo_padrao,
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                key=f"dl_{index}"
-                            )
-                    except:
-                        st.error("Erro ao gerar botão de download.")
+                    with open(nome_arquivo_padrao, "rb") as f_word:
+                        st.download_button(
+                            label=f"📥 1º Baixar e Revisar Word (MEMO {num_memo})",
+                            data=f_word,
+                            file_name=nome_arquivo_padrao,
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"dl_{index}"
+                        )
                         
-                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL
+                # BOTÃO DE DISPARO INDIVIDUAL E ISOLADO VIA GMAIL (Estrutura linear limpa)
                 with col2:
                     if st.button(f"🚀 2º Confirmar e Enviar E-mail (MEMO {num_memo})", key=f"btn_{index}"):
                         if not email_destino or "@" not in email_destino:
                             st.error("❌ Erro: O e-mail da coluna 'EMAIL_SETOR' está em branco ou incorreto.")
                         else:
-                            try:
-                                msg = EmailMessage()
-                                msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
-                                msg["From"] = st.secrets["EMAIL_USER"]
-                                msg["To"] = email_destino
-                                
-                                msg.set_content(
-                                    f"{saudacao} Prezados,\n\n"
-                                    f"Seguem em anexo os documentos validados e emitidos pelo Núcleo de Segurança do Paciente (NSP) "
-                                    f"referentes ao Memorando Nº {memo_formatado} da Notificação de Incidente Hospitalar Nº {num_notif}.\n\n"
-                                    f"Solicitamos que o setor responsável analise e proceda com as tratativas necessárias utilizando a ficha limpa em anexo.\n\n"
-                                    f"Atenciosamente,\n"
-                                    f"NSP - Hospital da Cidade Dr. Jackson Lago."
-                                )
-                                
-                                # Leitura direta sem estruturas com risco de indentação
-                                dados_memo = open(nome_arquivo_padrao, "rb").read()
-                                dados_roteiro = open(CAMINHO_ROTEIRO, "rb").read()
-                                
-                                msg.add_attachment(dados_memo, maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
+                            msg = EmailMessage()
+                            msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
+                            msg["From"] = "nsp.hospital@gmail.com"
+                            msg["To"] = email_destino
+                            
+                            msg.set_content(
+                                f"{saudacao} Prezados,\n\n"
+                                f"Seguem em anexo os documentos validados e emitidos pelo Núcleo de Segurança do Paciente (NSP) "
+                                f"referentes ao Memorando Nº {memo_formatado} da Notificação de Incidente Hospitalar Nº {num_notif}.\n\n"
+                                f"Solicitamos que o setor responsável analise e proceda com as tratativas necessárias utilizando a ficha limpa em anexo.\n\n"
+                                f"Atenciosamente,\n"
+                                f"NSP - Hospital da Cidade Dr. Jackson Lago."
+                            )
+                            
+                            # Leituras diretas imunes a recuo de espaços
+                            dados_memo = open(nome_arquivo_padrao, "rb").read()
+                            dados_roteiro = open(CAMINHO_ROTEIRO, "rb").read()
+                            
+                            msg.add_attachment(dados_memo, maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
+                            msg.add_attachment(dados_roteiro, maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
+                            
+                            # Envio simplificado direto
