@@ -24,8 +24,11 @@ if arquivo_excel:
     elif not os.path.exists(CAMINHO_ROTEIRO):
         st.error(f"❌ Erro: O arquivo '{CAMINHO_ROTEIRO}' não foi encontrado no repositório do GitHub.")
     else:
-        # CORREÇÃO APLICADA: Lê automaticamente a primeira aba da planilha, independente do nome
+        # CORREÇÃO: Lê automaticamente a primeira aba da planilha, independente do nome
         df = pd.read_excel(arquivo_excel)
+        
+        # Limpa os nomes das colunas removendo espaços extras invisíveis no início ou fim
+        df.columns = df.columns.astype(str).str.strip()
         
         # LIMPEZA: Remove linhas vazias baseando-se na coluna Nº (Notificação)
         df = df.dropna(subset=["Nº"])
@@ -40,15 +43,20 @@ if arquivo_excel:
             st.success("✨ Nenhum memorando pendente encontrado na planilha!")
         else:
             st.subheader(f"📋 Painel de Conferência ({len(df_pendentes)} memorandos identificados)")
-            st.dataframe(df_pendentes[["Nº", "STATUS", "SETOR NOTIFICADO 02", "NOME"]])
+            
+            # Descobre quais colunas realmente existem para montar uma tabela segura na tela
+            colunas_existentes = [c for c in ["Nº", "STATUS", "NOME"] if c in df_pendentes.columns]
+            st.dataframe(df_pendentes[colunas_existentes])
             st.write("---")
             
             # Varre a planilha linha por linha tratando cada envio de forma isolada e separada
             for index, linha in df_pendentes.iterrows():
                 num_notif = str(int(linha.get("Nº", 0)))
-                num_memo = str(int(linha.get("Nº Memo 02", 0))) if pd.notna(linha.get("Nº Memo 02")) else "0000"
-                paciente = str(linha.get("NOME", ""))
-                setor_destino = str(linha.get("GESTOR DE QUEM VAI RECEBER O GMAIL", ""))
+                
+                # Busca flexível para os nomes das colunas de Memo e Setor
+                num_memo = str(int(linha.get("Nº Memo 02", linha.get("Nº MEMO", 0)))) if pd.notna(linha.get("Nº Memo 02")) or pd.notna(linha.get("Nº MEMO")) else "0000"
+                paciente = str(linha.get("NOME", "Paciente"))
+                setor_destino = str(linha.get("GESTOR DE QUEM VAI RECEBER O GMAIL", linha.get("SETOR NOTIFICADO 02", "")))
                 email_destino = str(linha.get("EMAIL_SETOR", "")).strip()
                 
                 # Identifica dinamicamente se o horário atual pede Bom dia ou Boa tarde
@@ -61,7 +69,7 @@ if arquivo_excel:
                 # Carrega o modelo do Word limpo para evitar contaminação de dados antigos
                 doc = Document(CAMINHO_MODELO)
                 
-                # Mapeamento exato das colunas reais da planilha com as chaves do Word
+                # Mapeamento das chaves internas do seu Word
                 dados_dinamicos = {
                     "{{numero_memorando}}": num_memo,
                     "{{notificacao_n}}": num_notif,
