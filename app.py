@@ -13,7 +13,7 @@ st.write("Hospital da Cidade Dr. Jackson Lago - São Luís")
 
 # Arquivos fixos que devem estar guardados na raiz do seu repositório do GitHub
 CAMINHO_MODELO = "modelo_memorando.docx"
-CAMINHO_ROTEIRO = "roteiro_tratativa.docx"  # O modelo limpo que o outro setor vai preencher
+CAMINHO_ROTEIRO = "roteiro_tratativa.docx"
 
 # Entrada da Planilha compactada via Upload
 arquivo_excel = st.file_uploader("1. Faça o upload da sua planilha de notificações (.xlsx)", type=["xlsx"])
@@ -24,10 +24,10 @@ if arquivo_excel:
     elif not os.path.exists(CAMINHO_ROTEIRO):
         st.error(f"❌ Erro: O arquivo '{CAMINHO_ROTEIRO}' não foi encontrado no repositório do GitHub.")
     else:
-        # CORREÇÃO: Lê automaticamente a primeira aba da planilha, independente do nome
+        # Lê automaticamente a primeira aba da planilha, independente do nome
         df = pd.read_excel(arquivo_excel)
         
-        # Limpa os nomes das colunas removendo espaços extras invisíveis no início ou fim
+        # Limpa os nomes das colunas removendo espaços extras invisíveis
         df.columns = df.columns.astype(str).str.strip()
         
         # LIMPEZA: Remove linhas vazias baseando-se na coluna Nº (Notificação)
@@ -43,21 +43,22 @@ if arquivo_excel:
             st.success("✨ Nenhum memorando pendente encontrado na planilha!")
         else:
             st.subheader(f"📋 Painel de Conferência ({len(df_pendentes)} memorandos identificados)")
-            
-            # Descobre quais colunas realmente existem para montar uma tabela segura na tela
             colunas_existentes = [c for c in ["Nº", "STATUS", "NOME"] if c in df_pendentes.columns]
             st.dataframe(df_pendentes[colunas_existentes])
             st.write("---")
             
-            # Varre a planilha linha por linha tratando cada envio de forma isolada e separada
+            # Varre a planilha linha por linha tratando cada envio de forma isolada
             for index, linha in df_pendentes.iterrows():
                 num_notif = str(int(linha.get("Nº", 0)))
-                
-                # Busca flexível para os nomes das colunas de Memo e Setor
                 num_memo = str(int(linha.get("Nº Memo 02", linha.get("Nº MEMO", 0)))) if pd.notna(linha.get("Nº Memo 02")) or pd.notna(linha.get("Nº MEMO")) else "0000"
                 paciente = str(linha.get("NOME", "Paciente"))
                 setor_destino = str(linha.get("GESTOR DE QUEM VAI RECEBER O GMAIL", linha.get("SETOR NOTIFICADO 02", "")))
                 email_destino = str(linha.get("EMAIL_SETOR", "")).strip()
+                
+                # Coleta as novas informações adicionadas baseadas na planilha
+                leito_paciente = str(linha.get("LEITO", ""))
+                setor_notif = str(linha.get("SETOR NOTIFICANTE", ""))
+                sugestao_nsp = str(linha.get("SUGESTÃO", ""))
                 
                 # Identifica dinamicamente se o horário atual pede Bom dia ou Boa tarde
                 hora_atual = datetime.now().hour
@@ -66,25 +67,31 @@ if arquivo_excel:
                 st.markdown(f"### 📄 Bloco de Envio Isolado: Notificação Nº {num_notif}")
                 st.caption(f"**Setor de Destino (PARA):** {setor_destino} | **E-mail Alvo:** {email_destino}")
                 
-                # Carrega o modelo do Word limpo para evitar contaminação de dados antigos
+                # Carrega o modelo do Word limpo
                 doc = Document(CAMINHO_MODELO)
                 
-                # Mapeamento das chaves internas do seu Word
+                # Mapeamento completo com todas as tags do documento oficial
                 dados_dinamicos = {
                     "{{numero_memorando}}": num_memo,
                     "{{notificacao_n}}": num_notif,
-                    "{{data_analise}}": str(linha.get("DATA DA ANÁLISE", "")).split(' ')[0],
+                    "{{data_ocorrencia}}": str(linha.get("DATA DA OCORRÊNCIA", "")).split(' ')[0],
                     "{{data_notificacao}}": str(linha.get("DATA DA NOTIFICAÇÃO", "")).split(' ')[0],
-                    "{{setor_notificante}}": str(linha.get("SETOR NOTIFICANTE", "")),
+                    "{{localizacao}}": str(linha.get("ONDE OCORREU INCIDENTE", linha.get("LOCALIZAÇÃO", ""))),
+                    "{{tipo_incidente}}": str(linha.get("TIPO DE INCIDENTE", "")),
+                    "{{classificacao_incidente}}": str(linha.get("CLASSIFICAÇÃO DO INCIDENTE", "")),
+                    "{{descricao_notificacao}}": str(linha.get("DESCRIÇÃO DA NOTIFICAÇÃO", "")),
+                    "{{setor_notificante}}": setor_notif,
                     "{{setor_destino}}": setor_destino,
                     "{{nome_paciente}}": paciente,
+                    "{{leito}}": leito_paciente,
+                    "{{sugestao}}": sugestao_nsp
                 }
                 
                 # Trata a marcação automática dos turnos
                 turno = str(linha.get("TURNO", "")).strip().upper()
-                dados_dinamicos["{{m}}"] = "X" if turno == "MANHÃ" else " "
-                dados_dinamicos["{{t}}"] = "X" if turno == "TARDE" else " "
-                dados_dinamicos["{{n}}"] = "X" if turno == "NOITE" else " "
+                dados_dinamicos["{{m}}"] = "X" if "MANHÃ" in turno else " "
+                dados_dinamicos["{{t}}"] = "X" if "TARDE" in turno else " "
+                dados_dinamicos["{{n}}"] = "X" if "NOITE" in turno else " "
                 
                 # Substitui os textos nos parágrafos comuns do Word
                 for p in doc.paragraphs:
@@ -92,7 +99,7 @@ if arquivo_excel:
                         if tag in p.text:
                             p.text = p.text.replace(tag, valor)
                             
-                # Substitui os textos caso suas tags estejam inseridas dentro de tabelas do Word
+                # Substitui os textos caso estejam inseridos dentro de tabelas
                 for tabela in doc.tables:
                     for linha_tab in tabela.rows:
                         for celula in linha_tab.cells:
