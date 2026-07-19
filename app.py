@@ -20,15 +20,13 @@ def formatar_data_br(valor_data):
     if pd.isna(valor_data) or str(valor_data).strip() == "":
         return ""
     try:
-        # Se vier como carimbo de data/hora do pandas ou datetime
         dt = pd.to_datetime(valor_data)
         return dt.strftime("%d/%m/%Y")
     except:
-        # Se falhar, tenta limpar strings que venham com horário grudado
         str_data = str(valor_data).split(' ')[0]
         if '-' in str_data:
             partes = str_data.split('-')
-            if len(partes) == 3 and len(partes[0]) == 4: # Formato AAAA-MM-DD
+            if len(partes) == 3:
                 return f"{partes[2]}/{partes[1]}/{partes[0]}"
         return str_data
 
@@ -76,14 +74,14 @@ if arquivo_excel:
             for index, linha in df_pendentes.iterrows():
                 num_notif = str(int(linha.get("Nº", 0)))
                 
-                # Resgata o número do memo; remove pontos decimais se houver
+                # Resgata o número do memo e limpa decimais
                 raw_memo = linha.get("Nº Memo 02", linha.get("Nº MEMO", "0000"))
                 if pd.notna(raw_memo) and str(raw_memo).strip() != "":
                     num_memo = str(raw_memo).split('.')[0]
                 else:
                     num_memo = "0000"
                 
-                # Monta a estrutura correta exigida com o ano fixado caso falte
+                # Monta a estrutura correta com o ano fixado caso falte
                 memo_formatado = f"{num_memo}/2026" if "/" not in num_memo else num_memo
                 
                 paciente = str(linha.get("NOME", "Paciente"))
@@ -94,7 +92,7 @@ if arquivo_excel:
                 setor_notif = str(linha.get("SETOR NOTIFICANTE", ""))
                 sugestao_nsp = str(linha.get("SUGESTÃO", ""))
                 
-                # Tratamento robusto das datas para o padrão nacional brasileiro
+                # Tratamento robusto das datas
                 dt_ocorrencia_br = formatar_data_br(linha.get("DATA DA OCORRÊNCIA", ""))
                 dt_notificacao_br = formatar_data_br(linha.get("DATA DA NOTIFICAÇÃO", ""))
                 dt_extenso_br = formatar_data_extenso(linha.get("DATA DA NOTIFICAÇÃO", datetime.now()))
@@ -123,7 +121,7 @@ if arquivo_excel:
                     "{{sugestao}}": sugestao_nsp
                 }
                 
-                # Regra estrita para marcação de caixas de seleção de Turnos com o X maiúsculo
+                # Regra estrita para marcação de turnos
                 turno = str(linha.get("TURNO", "")).strip().upper()
                 dados_dinamicos["{{m}}"] = "X" if "MANHÃ" in turno or "MANHA" in turno else " "
                 dados_dinamicos["{{t}}"] = "X" if "TARDE" in turno else " "
@@ -131,7 +129,6 @@ if arquivo_excel:
                 
                 # Varre parágrafos realizando as trocas
                 for p in doc.paragraphs:
-                    # Correção da linha da cidade em tempo real
                     if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
                         p.text = f"São Luís, {dt_extenso_br}"
                     for tag, valor in dados_dinamicos.items():
@@ -184,3 +181,6 @@ if arquivo_excel:
                                 )
                                 
                                 with open(nome_arquivo_padrao, "rb") as f_anexo1:
+                                    msg.add_attachment(f_anexo1.read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_arquivo_padrao)
+                                    
+                                with open(CAMINHO_ROTEIRO, "rb") as f_anexo2:
