@@ -77,18 +77,19 @@ if arquivo_excel:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
             df = pd.read_excel(arquivo_excel)
             
-            # 🔍 Varredura dinâmica unificada com suporte total a acentuações ampliadas
+            # 🔍 Varredura ultra precisa buscando a palavra MEMO nos nomes originais das colunas
             mapa_colunas = {}
             for col in df.columns:
-                c_upper = str(col).strip().upper().replace("º", "").replace("°", "").replace("Ã", "A").replace("Õ", "O").replace("Ç", "C")
+                col_original_upper = str(col).upper()
+                c_upper = col_original_upper.replace("º", "").replace("°", "").replace("Ã", "A").replace("Õ", "O").replace("Ç", "C")
                 
                 if col == "Nº": 
                     mapa_colunas["NOTIF"] = col
                 elif "PACIENTE" in c_upper or "NOME" in c_upper: 
                     mapa_colunas["PACIENTE"] = col
-                elif "MEMO" in c_upper and ("1" in c_upper or "01" in c_upper): 
+                elif "MEMO" in col_original_upper and ("1" in col_original_upper or "01" in col_original_upper): 
                     mapa_colunas["MEMO01"] = col
-                elif "MEMO" in c_upper and ("2" in c_upper or "02" in c_upper): 
+                elif "MEMO" in col_original_upper and ("2" in col_original_upper or "02" in col_original_upper): 
                     mapa_colunas["MEMO02"] = col
                 elif "DATA" in c_upper and "NOTIF" in c_upper: 
                     mapa_colunas["DATA_NOTIF"] = col
@@ -116,6 +117,7 @@ if arquivo_excel:
             for index, line in df.iterrows():
                 nome_do_paciente = str(line[coluna_paciente]).strip()
                 
+                # Coleta dinâmica dos valores dos memorandos
                 memo_01 = str(line.get(mapa_colunas.get("MEMO01", ""), "")).strip()
                 memo_02 = str(line.get(mapa_colunas.get("MEMO02", ""), "")).strip()
                 
@@ -150,10 +152,7 @@ if arquivo_excel:
                     "{{descricao_notificacao}}": limpar_nan(line.get(mapa_colunas.get("DESC", ""), "")),
                     "{{nome_paciente}}": nome_do_paciente,
                     "{{leito}}": limpar_numero_float(line.get(mapa_colunas.get("LEITO", ""), "")),
-                    
-                    # 🎯 Captura calibrada para a coluna de Sugestão
                     "{{sugestao}}": limpar_nan(line.get(mapa_colunas.get("SUGESTAO", ""), "")),
-                    
                     "{{m}}": marca_manha,
                     "{{t}}": marca_tarde,
                     "{{n}}": marca_noite,
