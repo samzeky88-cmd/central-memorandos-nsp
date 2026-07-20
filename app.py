@@ -146,9 +146,9 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         f"Agente Administrativo"
     )
     
+    # 🎯 ATUALIZADO: Rota padrão global do Gmail de alta compatibilidade para navegadores Chrome
     link_gmail = (
-        f"https://google.com?"
-        f"view=cm&fs=1&tf=1"
+        f"https://google.com"
         f"&to={urllib.parse.quote(email_destino)}"
         f"&su={urllib.parse.quote(assunto_email)}"
         f"&body={urllib.parse.quote(corpo_email)}"
