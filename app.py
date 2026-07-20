@@ -47,9 +47,9 @@ def formatar_data_br(valor):
             return ""
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
-        v_str = str(valor).strip().split(" ")[0]
-        if "-" in v_str:
-            parts = v_str.split("-")
+        v_str = str(valor).strip().split(" ")
+        if len(v_str) > 0 and "-" in v_str[0]:
+            parts = v_str[0].split("-")
             if len(parts) == 3:
                 return f"{parts[2]}/{parts[1]}/{parts[0]}"
         return str(valor).strip()
@@ -88,19 +88,16 @@ def gerar_pdf_hospitalar_real(dados, nome_arquivo):
     pdf.add_page()
     pdf.set_margins(20, 20, 20)
     
-    # Cabeçalho de Alinhamento à Direita para Localidade e Data
     pdf.set_font("Arial", "", 11)
     data_cabecalho = f"Sao Luis, {dados.get('{{data_envio}}')}"
     pdf.cell(0, 10, data_cabecalho, ln=True, align="R")
     pdf.ln(10)
     
-    # Texto Introdutório
     pdf.set_font("Arial", "", 11)
     texto_intro = "Prezado (a), vimos atraves deste comunicar que recebemos uma notificacao de incidente ocorrida neste setor. Segue abaixo as informacoes encaminhadas ao NSP:"
     pdf.multi_cell(0, 6, texto_intro)
     pdf.ln(5)
     
-    # Listagem de Informações Técnicas estruturadas do Incidente
     itens_memorando = [
         ("DATA DA OCORRENCIA", dados.get("{{data_ocorrencia}}")),
         ("DATA DA NOTIFICACAO", dados.get("{{data_notificacao}}")),
@@ -116,7 +113,7 @@ def gerar_pdf_hospitalar_real(dados, nome_arquivo):
     ]
     
     for label, valor in itens_memorando:
-        if valor: # Apenas renderiza se contiver conteúdo válido
+        if valor:
             pdf.set_font("Arial", "B", 10)
             pdf.write(6, f"• {label}: ")
             pdf.set_font("Arial", "", 10)
@@ -129,13 +126,11 @@ def gerar_pdf_hospitalar_real(dados, nome_arquivo):
 def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif, col_data_notif, col_data_ocorr, col_turno, col_tipo, col_classif, col_desc, col_leito, col_notificante, col_sugestao, col_localizacao, col_email, data_extenso_envio):
     nome_do_paciente = tratar_str_limpa(linha[col_paciente])
     
-    # Busca para os números de memorando
     memo_01 = tratar_str_limpa(linha.get("Nº Memo 01", ""))
     if memo_01 == "":
         memo_01 = tratar_str_limpa(linha.get("MEMO", ""))
         
     memo_02 = tratar_str_limpa(linha.get("Nº Memo 02", ""))
-    
     if memo_01 == "":
         num_memo_cru = memo_02 if memo_02 != "" else "S-N"
     else:
@@ -226,3 +221,15 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
                 file_name=f"{nome_base_arquivo}.pdf",
                 mime="application/pdf",
                 key=f"p_{index}"
+            )
+        
+    with col_email_btn:
+        st.link_button(
+            label="📧 Enviar E-mail",
+            url=link_gmail,
+            key=f"e_{index}"
+        )
+        
+    st.markdown("---")
+
+if arquivo_excel:
