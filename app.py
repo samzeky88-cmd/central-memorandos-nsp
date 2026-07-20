@@ -2,8 +2,9 @@ import os
 import pandas as pd
 import streamlit as st
 import io
+import subprocess
+import time
 from docx import Document
-from fpdf import FPDF
 
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
@@ -37,46 +38,64 @@ def formatar_data_br(valor):
             return ""
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
+        # Se já for string ou formato texto, limpa possíveis horas residuais
+        v_str = str(valor).split(" ")[0]
+        if "-" in v_str:
+            parts = v_str.split("-")
+            if len(parts) == 3 and len(parts[0]) == 4:
+                return f"{parts[2]}/{parts[1]}/{parts[0]}"
+        return v_str
+
+def limpar_numero_float(valor):
+    """Remove o .0 de números inteiros vindos do Excel (ex: 886.0 vira 886)"""
+    if pd.isna(valor):
+        return "S-N"
+    try:
+        if isinstance(valor, float) and valor.is_integer():
+            return str(int(valor))
+        v_str = str(valor).strip()
+        if v_str.endswith(".0"):
+            return v_str[:-2]
+        return v_str
+    except:
         return str(valor)
 
-def gerar_pdf_nativo_memoria(dados):
-    """Gera um PDF estruturado de forma nativa e rápida em memória utilizando FPDF2."""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_margins(20, 20, 20)
-    
-    # Configura fontes padrão seguras
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, "HOSPITAL DR. JACKSON LAGO", ln=True, align="C")
-    pdf.cell(0, 8, "NÚCLEO DE SEGURANÇA DO PACIENTE - NSP", ln=True, align="C")
-    pdf.ln(10)
-    
-    pdf.set_font("Helvetica", "", 11)
-    
-    # Cabeçalho do Memorando textual
-    pdf.write(6, "MEMORANDO Nº: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{numero_memorando}}']}\n"); pdf.set_font("Helvetica", "", 11)
-    pdf.write(6, "PARA: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{gestor}}']} {dados['{{setor}}']}\n"); pdf.set_font("Helvetica", "", 11)
-    pdf.write(6, "NOTIFICAÇÃO Nº: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{notificacao_n}}']}\n"); pdf.set_font("Helvetica", "", 11)
-    pdf.write(6, "DATA DA OCORRÊNCIA: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{data_ocorrencia}}']}\n"); pdf.set_font("Helvetica", "", 11)
-    pdf.write(6, "PACIENTE: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{nome_paciente}}']}\n"); pdf.set_font("Helvetica", "", 11)
-    pdf.ln(6)
-    
-    # Corpo do texto estruturado
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 6, "DESCRIÇÃO DA NOTIFICAÇÃO:", ln=True)
-    pdf.set_font("Helvetica", "", 11)
-    
-    # Corrige problemas comuns de caracteres especiais (como acentos) no PDF nativo
-    txt_descricao = str(dados['{{descricao_notificacao}}']).encode('latin-1', 'replace').decode('latin-1')
-    pdf.multi_cell(0, 6, txt_descricao)
-    
-    # Retorna o arquivo compilado em formato de bytes
-    return pdf.output()
+def converter_docx_para_pdf_via_sistema(caminho_docx, index):
+    """Utiliza o LibreOffice de forma isolada e robusta para evitar erros no Linux do Streamlit."""
+    try:
+        user_profile_dir = f"/tmp/libreoffice_profile_{index}_{int(time.time())}"
+        
+        comando = [
+            "soffice",
+            f"-env:UserInstallation=file://{user_profile_dir}",
+            "--headless",
+            "--nofirststartwizard",
+            "--norestore",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            "/tmp",
+            caminho_docx
+        ]
+        
+        subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=30)
+        nome_pdf_gerado = os.path.join("/tmp", os.path.basename(caminho_docx).replace(".docx", ".pdf"))
+        
+        if os.path.exists(nome_pdf_gerado):
+            with open(nome_pdf_gerado, "rb") as f:
+                dados_pdf = f.read()
+            os.remove(nome_pdf_gerado)
+            subprocess.run(["rm", "-rf", user_profile_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return dados_pdf
+    except Exception as e:
+        pass
+    return None
 
 @st.fragment
-def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, nome_col_notif):
+def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif, col_data_notif, col_data_ocorr, col_turno, col_tipo, col_classif, col_desc, col_leito, col_notificante, col_sugestao, col_localizacao):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
+    # Coleta inteligente do número do memorando nas duas colunas possíveis
     memo_01 = str(linha.get("Nº Memo 01", "")).strip()
     memo_02 = str(linha.get("Nº Memo 02", "")).strip()
     
@@ -85,36 +104,36 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, nome_col_n
     else:
         num_memo_cru = memo_01
         
-    # Coleta de forma limpa o número da primeira coluna
-    num_notif = str(linha.get(nome_col_notif, "S-N")).strip()
-    if num_notif.lower() == "nan" or num_notif == "":
-        num_notif = "S-N"
+    # Coleta e limpa o número da notificação para arrancar o .0 fora
+    num_notif_cru = linha.get(col_notif, "S-N")
+    num_notif = limpar_numero_float(num_notif_cru)
     
-    # Padronização exata dos nomes dos arquivos para o seu computador
+    # Padronização limpa do nome do arquivo final
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
-    num_notif_limpo = num_notif.replace("Nº", "").replace(" ", "").strip()
-    nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif_limpo}_I_NSP"
+    nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
     
-    turno_planilha = str(linha.get("turno", "")).strip().upper()
-    marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
-    marca_tarde = "X" if "TARDE" in turno_planilha else " "
-    marca_noite = "X" if "NOITE" in turno_planilha else " "
+    # Lógica minuciosa e resiliente para marcação dos turnos com X
+    turno_planilha = str(linha.get(col_turno, "")).strip().upper() if col_turno else ""
+    marca_manha = "X" if "MANH" in turno_planilha or "MANHÃ" in turno_planilha else " "
+    marca_tarde = "X" if "TARD" in turno_planilha or "TARDE" in turno_planilha else " "
+    marca_noite = "X" if "NOIT" in turno_planilha or "NOITE" in turno_planilha else " "
     
+    # Montagem do dicionário vinculando os dados dinâmicos às tags do seu modelo Word
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
-        "{{gestor}}": str(linha.get("Gestor 01", "")),
-        "{{setor}}": str(linha.get("SETOR NOTIFICADO", "")),
+        "{{gestor}}": str(linha.get("Gestor 01", "")).strip(),
+        "{{setor}}": str(linha.get("SETOR NOTIFICADO", "")).strip(),
         "{{notificacao_n}}": num_notif,
-        "{{data_notificacao}}": formatar_data_br(linha.get("data_notificacao", "")),
-        "{{data_ocorrencia}}": formatar_data_br(linha.get("data_ocorrencia", "")),
-        "{{localizacao}}": str(linha.get("localizacao", "")),
-        "{{tipo_incidente}}": str(linha.get("tipo_incidente", "")),
-        "{{classificacao_incidente}}": str(linha.get("classificacao_incidente", "")),
-        "{{descricao_notificacao}}": str(linha.get("descricao_notificacao", "")),
+        "{{data_notificacao}}": formatar_data_br(linha.get(col_data_notif, "")) if col_data_notif else "",
+        "{{data_ocorrencia}}": formatar_data_br(linha.get(col_data_ocorr, "")) if col_data_ocorr else "",
+        "{{localizacao}}": str(linha.get(col_localizacao, "")).strip() if col_localizacao else "",
+        "{{tipo_incidente}}": str(linha.get(col_tipo, "")).strip() if col_tipo else "",
+        "{{classificacao_incidente}}": str(linha.get(col_classif, "")).strip() if col_classif else "",
+        "{{descricao_notificacao}}": str(linha.get(col_desc, "")).strip() if col_desc else "",
         "{{nome_paciente}}": nome_do_paciente,
-        "{{leito}}": str(linha.get("leito", "")),
-        "{{setor_notificante}}": str(linha.get("setor_notificante", "")),
-        "{{sugestao}}": str(linha.get("sugestao", "")),
+        "{{leito}}": limpar_numero_float(linha.get(col_leito, "")) if col_leito else "",
+        "{{setor_notificante}}": str(linha.get(col_notificante, "")).strip() if col_notificante else "",
+        "{{sugestao}}": str(linha.get(col_sugestao, "")).strip() if col_sugestao else "",
         "{{m}}": marca_manha,
         "{{t}}": marca_tarde,
         "{{n}}": marca_noite
@@ -141,38 +160,72 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, nome_col_n
         )
         
     with col_pdf:
-        # Geração instantânea e leve direto em memória Python (Não trava mais)
-        pdf_data = gerar_pdf_nativo_memoria(dados_memorando)
-        st.download_button(
-            label="📕 Baixar PDF",
-            data=bytes(pdf_data),
-            file_name=f"{nome_base_arquivo}.pdf",
-            mime="application/pdf",
-            key=f"p_{index}"
-        )
+        if st.button("⚡ Gerar PDF", key=f"p_btn_{index}"):
+            with st.spinner("Processando..."):
+                doc_pdf = Document(caminho_modelo)
+                substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
+                
+                caminho_temp = f"/tmp/doc_{index}_{int(time.time())}.docx"
+                doc_pdf.save(caminho_temp)
+                
+                pdf_bytes = converter_docx_para_pdf_via_sistema(caminho_temp, index)
+                
+                if os.path.exists(caminho_temp):
+                    os.remove(caminho_temp)
+                    
+                if pdf_bytes:
+                    st.download_button(
+                        label="📥 Salvar PDF",
+                        data=pdf_bytes,
+                        file_name=f"{nome_base_arquivo}.pdf",
+                        mime="application/pdf",
+                        key=f"dl_pdf_{index}"
+                    )
+                else:
+                    st.error("Erro temporário no servidor. Clique em 'Gerar PDF' novamente.")
     st.markdown("---")
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     
-    # 🎯 CORRIGIDO: Captura o nome exato da primeira coluna da planilha (Coluna A) de forma isolada
-    nome_col_notif = df.columns[0]
+    # 🎯 MAPEAMENTO INTELIGENTE DAS VARIÁVEIS BASEADO NOS TÍTULOS DA PLANILHA
+    # Captura a primeira coluna (A) nativa para assegurar o número da Notificação
+    col_notif_forcada = df.columns[0]
     
     df.columns = df.columns.str.strip()
     
-    coluna_paciente = None
+    col_paciente = None
+    col_data_notif = None
+    col_data_ocorr = None
+    col_turno = None
+    col_tipo = None
+    col_classif = None
+    col_desc = None
+    col_leito = None
+    col_notificante = None
+    col_sugestao = None
+    col_localizacao = None
+    
     for col in df.columns:
         c_upper = col.upper()
-        if "PACIENTE" in c_upper or "NOME" in c_upper:
-            coluna_paciente = col
+        if "PACIENTE" in c_upper or "NOME" in c_upper: col_paciente = col
+        elif "DATA" in c_upper and "NOTIF" in c_upper: col_data_notif = col
+        elif "DATA" in c_upper and ("OCORR" in c_upper or "OCOR" in c_upper): col_data_ocorr = col
+        elif "TURNO" in c_upper: col_turno = col
+        elif "TIPO" in c_upper or "INCIDENTE" in c_upper: col_tipo = col
+        elif "CLASSIF" in c_upper: col_classif = col
+        elif "DESC" in c_upper or "RESUMO" in c_upper: col_desc = col
+        elif "LEITO" in c_upper: col_leito = col
+        elif "NOTIFICANTE" in c_upper or "QUEM" in c_upper: col_notificante = col
+        elif "SUGES" in c_upper or "RECO" in c_upper: col_sugestao = col
+        elif "LOCAL" in c_upper or "ALA" in c_upper or "O2" in c_upper: col_localizacao = col
             
-    if not coluna_paciente: 
-        coluna_paciente = df.columns[1]
+    if not col_paciente: col_paciente = df.columns[1]
         
-    df = df.dropna(subset=[coluna_paciente])
-    df = df[df[coluna_paciente].astype(str).str.strip() != ""]
+    df = df.dropna(subset=[col_paciente])
+    df = df[df[col_paciente].astype(str).str.strip() != ""]
     
     st.success(f"📋 Lista de verificação pronta! {len(df)} registros encontrados.")
     
     for index, linha in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, nome_col_notif)
+        renderizar_linha_paciente_sob_demanda(
