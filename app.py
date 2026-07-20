@@ -60,7 +60,7 @@ def limpar_numero_float(valor):
         return str(valor)
 
 @st.fragment
-def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif):
+def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, nome_coluna_notificacao):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
     # Coleta inteligente do número do memorando nas duas colunas possíveis (Memo 01 ou Memo 02)
@@ -72,7 +72,9 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
     else:
         num_memo_cru = memo_01
         
-    num_notif = limpar_numero_float(linha.get(col_notif, "S-N"))
+    # Coleta o valor individual da célula daquela linha específica
+    valor_notif_celula = linha.get(nome_coluna_notificacao, "S-N")
+    num_notif = limpar_numero_float(valor_notif_celula)
     
     # Padronização limpa do nome do arquivo final
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
@@ -84,7 +86,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
     marca_tarde = "X" if "TARD" in turno_planilha or "TARDE" in turno_planilha else " "
     marca_noite = "X" if "NOIT" in turno_planilha or "NOITE" in turno_planilha else " "
     
-    # Mapeamento definitivo e amarrado com 100% de precisão aos cabeçalhos das suas imagens
+    # Mapeamento definitivo associando as chaves
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
         "{{gestor}}": limpar_nan(linha.get("Gestor 01", "")),
@@ -92,12 +94,9 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         "{{notificacao_n}}": num_notif,
         "{{data_notificacao}}": formatar_data_br(linha.get("data_notificacao", "")),
         "{{data_ocorrencia}}": formatar_data_br(linha.get("data_ocorrencia", "")),
-        
-        # Amarração com os nomes validados por imagem:
         "{{localizacao}}": limpar_nan(linha.get("ONDE OCORREU INCIDENTE", "")), 
         "{{classificacao_incidente}}": limpar_nan(linha.get("CLASSIFICAÇÃO DO INCIDENTE", "")), 
         "{{setor_notificante}}": limpar_nan(linha.get("SETOR NOTIFICANTE", "")), 
-        
         "{{tipo_incidente}}": limpar_nan(linha.get("tipo_incidente", "")),
         "{{descricao_notificacao}}": limpar_nan(linha.get("descricao_notificacao", "")),
         "{{nome_paciente}}": nome_do_paciente,
@@ -129,7 +128,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         )
         
     with col_pdf:
-        # Usa a estrutura em bytes do documento customizado para download idêntico do PDF preservando as mídias
         doc_pdf = Document(caminho_modelo)
         substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
         pdf_io = io.BytesIO()
@@ -148,25 +146,25 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     
-    # Captura a primeira coluna (A) nativa para o número da Notificação
-    col_notif_forcada = df.columns
+    # 🎯 CORREÇÃO: Extrai o nome em texto puro da primeira coluna (Coluna A) para evitar passar a lista inteira
+    nome_coluna_notificacao = str(df.columns[0]).strip()
     
-    # Limpa todos os espaços invisíveis no início e fim dos nomes das colunas
+    # Limpa os cabeçalhos normais do arquivo
     df.columns = df.columns.str.strip()
     
-    col_paciente = None
+    coluna_paciente = None
     for col in df.columns:
         if "PACIENTE" in col.upper() or "NOME" in col.upper(): 
-            col_paciente = col
+            coluna_paciente = col
             break
             
-    if not col_paciente: 
-        col_paciente = "PACIENTE"
+    if not coluna_paciente: 
+        coluna_paciente = "PACIENTE"
         
-    df = df.dropna(subset=[col_paciente])
-    df = df[df[col_paciente].astype(str).str.strip() != ""]
+    df = df.dropna(subset=[coluna_paciente])
+    df = df[df[coluna_paciente].astype(str).str.strip() != ""]
     
     st.success(f"📋 Lista de verificação pronta! {len(df)} registros encontrados.")
     
     for index, linha in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif_forcada)
+        renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, nome_coluna_notificacao)
