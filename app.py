@@ -77,20 +77,21 @@ if arquivo_excel:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
             df = pd.read_excel(arquivo_excel)
             
-            # 🔍 Varredura ultra precisa buscando a palavra MEMO nos nomes originais das colunas
+            # 🔍 PROCURA PRECISA DAS COLUNAS EXATAS DA PLANILHA
             mapa_colunas = {}
             for col in df.columns:
-                col_original_upper = str(col).upper()
-                c_upper = col_original_upper.replace("º", "").replace("°", "").replace("Ã", "A").replace("Õ", "O").replace("Ç", "C")
+                col_limpa = str(col).strip()
+                c_upper = col_limpa.upper()
                 
-                if col == "Nº": 
+                # Casamento perfeito baseado na sua imagem real da planilha
+                if col_limpa == "Nº": 
                     mapa_colunas["NOTIF"] = col
+                elif col_limpa == "Nº Memo 01":
+                    mapa_colunas["MEMO01"] = col
+                elif col_limpa == "Nº Memo 02":
+                    mapa_colunas["MEMO02"] = col
                 elif "PACIENTE" in c_upper or "NOME" in c_upper: 
                     mapa_colunas["PACIENTE"] = col
-                elif "MEMO" in col_original_upper and ("1" in col_original_upper or "01" in col_original_upper): 
-                    mapa_colunas["MEMO01"] = col
-                elif "MEMO" in col_original_upper and ("2" in col_original_upper or "02" in col_original_upper): 
-                    mapa_colunas["MEMO02"] = col
                 elif "DATA" in c_upper and "NOTIF" in c_upper: 
                     mapa_colunas["DATA_NOTIF"] = col
                 elif "DATA" in c_upper and "OCORR" in c_upper: 
@@ -106,18 +107,28 @@ if arquivo_excel:
                 elif "SUGEST" in c_upper or "SUGESTAO" in c_upper: 
                     mapa_colunas["SUGESTAO"] = col
 
-            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns)
-            df.columns = df.columns.str.strip()
+            # 🛠️ SISTEMA DE SEGURANÇA SECUNDÁRIO (Caso o Excel mude algo invisível nos nomes fixos)
+            if "MEMO01" not in mapa_colunas:
+                for col in df.columns:
+                    if "MEMO" in str(col).upper() and ("1" in str(col) or "01" in str(col)):
+                        mapa_colunas["MEMO01"] = col
+            if "MEMO02" not in mapa_colunas:
+                for col in df.columns:
+                    if "MEMO" in str(col).upper() and ("2" in str(col) or "02" in str(col)):
+                        mapa_colunas["MEMO02"] = col
+
+            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[1] if len(df.columns) > 1 else df.columns[0])
             df = df.dropna(subset=[coluna_paciente])
-            df = df[df[coluna_paciente].astype(str).str.strip() != ""]
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
             arquivos_processados = []
             
             for index, line in df.iterrows():
                 nome_do_paciente = str(line[coluna_paciente]).strip()
+                if nome_do_paciente.lower() == "nan" or nome_do_paciente == "":
+                    continue
                 
-                # Coleta dinâmica dos valores dos memorandos
+                # Coleta amarrada e fundida das colunas de memorando
                 memo_01 = str(line.get(mapa_colunas.get("MEMO01", ""), "")).strip()
                 memo_02 = str(line.get(mapa_colunas.get("MEMO02", ""), "")).strip()
                 
@@ -130,6 +141,8 @@ if arquivo_excel:
                 if num_notif == "": 
                     num_notif = str(index + 1)
                 
+                # Substitui barras e espaços para gerar o nome do arquivo limpo sem quebrar caminhos do Windows
+                # Transforma "Nº 1192 / 2026" em "1192 - 2026"
                 num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
                 nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
                 
@@ -174,7 +187,7 @@ if arquivo_excel:
             st.session_state[nome_chave_cache] = arquivos_processados 
 
     if nome_chave_cache in st.session_state:
-        st.success(f"📋 Lista de verificação pronta! {len(st.session_state[nome_chave_cache])} registros processados com sucesso.")
+        st.success(f"📋 Lista de verificação pronta! {len(st.session_state[nome_chave_cache])} registros processados.")
         
         for idx, item in enumerate(st.session_state[nome_chave_cache]):
             col_nome, col_word, col_pdf = st.columns(3)
@@ -187,16 +200,3 @@ if arquivo_excel:
                     label="📝 Baixar WORD",
                     data=item["conteudo"],
                     file_name=f"{item['nome_arquivo']}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"word_btn_{idx}"
-                )
-                
-            with col_pdf:
-                st.download_button(
-                    label="📕 Baixar PDF",
-                    data=item["conteudo"],
-                    file_name=f"{item['nome_arquivo']}.pdf",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"pdf_btn_{idx}"
-                )
-            st.markdown("---")
