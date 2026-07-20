@@ -146,7 +146,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         f"Agente Administrativo"
     )
     
-    # 🎯 ATUALIZADO: Rota padrão global do Gmail de alta compatibilidade para navegadores Chrome
     link_gmail = (
         f"https://google.com"
         f"&to={urllib.parse.quote(email_destino)}"
@@ -183,20 +182,33 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         )
         
     with col_email_btn:
-        st.link_button(
-            label="📧 E-mail",
-            url=link_gmail,
-            key=f"e_{index}"
-        )
+        # 🎯 SOLUÇÃO DA TRAVA DO CHROME: Substituído por botão HTML nativo injetado estilizado
+        botao_html = f"""
+        <a href="{link_gmail}" target="_blank" style="
+            text-decoration: none;
+            display: inline-block;
+            padding: 0.45rem 0.8rem;
+            border-radius: 0.375rem;
+            background-color: #262730;
+            color: #ffffff;
+            border: 1px solid rgba(250, 250, 250, 0.2);
+            font-size: 14px;
+            font-family: sans-serif;
+            text-align: center;
+            width: 100%;
+            font-weight: 400;
+        ">📧 E-mail</a>
+        """
+        st.markdown(botao_html, unsafe_transform=True)
         
     st.markdown("---")
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel, header=None)
     
-    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0]) == "1"):
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0, 1]).upper() or str(df.iloc[0, 0]) == "1"):
         df = df.iloc[1:]
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1]) == "1"):
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1, 1]).upper() or str(df.iloc[1, 0]) == "1"):
         df = df.iloc[2:]
         
     data_extenso_envio = obter_data_por_extenso(data_selecionada)
