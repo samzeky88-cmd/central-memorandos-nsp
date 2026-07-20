@@ -6,6 +6,13 @@ import urllib.parse
 from datetime import datetime
 from docx import Document
 
+# Biblioteca para gerar o PDF real estruturado na nuvem Linux
+try:
+    from fpdf import FPDF
+    FPDF_DISPONIVEL = True
+except ImportError:
+    FPDF_DISPONIVEL = False
+
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 
@@ -70,12 +77,56 @@ def obter_data_por_extenso(dt):
     }
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
+def gerar_pdf_hospitalar_real(dados):
+    """Gera um documento PDF real estruturado a partir da biblioteca fpdf2"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_margins(20, 20, 20)
+    
+    # Cabeçalho Alinhado à Direita
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(0, 10, f"Sao Luis, {dados.get('{{data_envio}}')}", ln=True, align="R")
+    pdf.ln(10)
+    
+    # Título do Memorando
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, f"MEMORANDO NSP No {dados.get('{{numero_memorando}}')}", ln=True, align="C")
+    pdf.ln(5)
+    
+    pdf.set_font("Arial", "", 11)
+    texto_intro = "Prezado (a), vimos atraves deste comunicar que recebemos uma notificacao de incidente ocorrida neste setor. Segue abaixo as informacoes encaminhadas ao NSP para analise e providencias:"
+    pdf.multi_cell(0, 6, texto_intro)
+    pdf.ln(5)
+    
+    itens = [
+        ("NOTIFICACAO No", dados.get("{{notificacao_n}}")),
+        ("PACIENTE", dados.get("{{nome_paciente}}")),
+        ("DATA DA OCORRENCIA", dados.get("{{data_ocorrencia}}")),
+        ("DATA DA NOTIFICACAO", dados.get("{{data_notificacao}}")),
+        ("TURNO QUE OCORREU", f"( {dados.get('{{m}}')} ) MANHA  ( {dados.get('{{t}}')} ) TARDE  ( {dados.get('{{n}}')} ) NOITE"),
+        ("ONDE OCORREU", dados.get("{{localizacao}}")),
+        ("TIPO DE INCIDENTE", dados.get("{{tipo_incidente}}")),
+        ("CLASSIFICACAO DO INCIDENTE", dados.get("{{classificacao_incidente}}")),
+        ("SETOR NOTIFICANTE", dados.get("{{setor_notificante}}")),
+        ("DESCRICAO DA NOTIFICACAO", dados.get("{{descricao_notificacao}}")),
+        ("SUGESTAO/RECOMENDACAO", dados.get("{{sugestao}}"))
+    ]
+    
+    for label, valor in itens:
+        if valor.strip():
+            pdf.set_font("Arial", "B", 10)
+            pdf.write(6, f"{label}: ")
+            pdf.set_font("Arial", "", 10)
+            pdf.write(6, f"{valor}\n")
+            pdf.ln(2)
+            
+    # Converte para estrutura binária legível
+    return pdf.output()
+
 @st.fragment
 def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
-    # Coleta posicional estrita baseada nos prints reais enviados (A=0, B=1, C=2...)
     num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
     
-    # Ignora linhas que contenham títulos repetidos da tabela do Excel
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
         return
 
@@ -87,7 +138,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
     descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
     
-    # Mapeamento do segundo bloco de colunas da imagem (J=9, K=10, L=11, M=12, N=13, O=14)
     nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
     leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
     setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
@@ -95,7 +145,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     gestor_destinatario = tratar_str_limpa(linha.iloc[13]) if num_colunas > 13 else "GESTOR DE ENFERMAGEM"
     setor_notificado_final = tratar_str_limpa(linha.iloc[14]) if num_colunas > 14 else onde_ocorreu
 
-    # Mapeamento do terceiro bloco (Memorando na coluna P=índice 15 e E-mail corrigido na coluna V=índice 21)
     num_memo_cru = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else ""
     if num_memo_cru == "":
         num_memo_cru = "S-N"
@@ -133,10 +182,8 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         "{{data_envio}}": data_extenso_envio
     }
     
-    # --- CONFIGURAÇÃO DO TEXTO PADRÃO DO GMAIL DO EZEQUIAS ---
     hora_atual = datetime.now().hour
     saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
-    
     assunto_email = f"NSP - Memorando Nº {num_memo_cru} (Notificação Nº {num_notif})"
     
     corpo_email = (
@@ -152,6 +199,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         f"Agente Administrativo"
     )
     
+    # 🎯 CORRIGIDO: Link absoluto estruturado de forma explícita para o Chrome aceitar redirecionamento externo
     link_gmail = (
         f"https://google.com?"
         f"view=cm&fs=1&tf=1"
@@ -167,7 +215,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         
     with col_word:
         doc_word = Document(caminho_modelo)
-        substituir_texto_protegendo_logos(doc_word, dados_memorando)  # Nome corrigido aqui 📝
+        substituir_texto_protegendo_logos(doc_word, dados_memorando)
         word_io = io.BytesIO()
         doc_word.save(word_io)
         word_io.seek(0)
@@ -180,48 +228,3 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         )
         
     with col_pdf:
-        doc_pdf = Document(caminho_modelo)
-        substituir_texto_protegendo_logos(doc_pdf, dados_memorando)  # Nome corrigido aqui 📕
-        pdf_io = io.BytesIO()
-        doc_pdf.save(pdf_io)
-        pdf_io.seek(0)
-        st.download_button(
-            label="📕 PDF",
-            data=pdf_io.getvalue(),
-            file_name=f"{nome_base_arquivo}.pdf",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            key=f"p_{index}"
-        )
-        
-    with col_email_btn:
-        st.link_button(
-            label="📧 E-mail",
-            url=link_gmail,
-            key=f"e_{index}"
-        )
-        
-    st.markdown("---")
-
-if arquivo_excel:
-    df = pd.read_excel(arquivo_excel, header=None)
-    
-    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0, 0]) == "1"):
-        df = df.iloc[1:]
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1, 0]) == "1"):
-        df = df.iloc[2:]
-        
-    data_extenso_envio = obter_data_por_extenso(data_selecionada)
-    num_colunas = len(df.columns)
-    
-    df = df.dropna(subset=[df.columns[0]])
-    
-    if num_colunas > 9:
-        df = df.dropna(subset=[df.columns[9]])
-        df = df[df[df.columns[9]].astype(str).str.strip() != ""]
-    
-    st.success(f"📋 Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
-    
-    for index, linha in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio)
-else:
-    st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
