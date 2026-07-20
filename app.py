@@ -166,7 +166,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
         "{{data_envio}}": data_extenso_envio
     }
     
-    # Tratamento preventivo: se o setor notificante ainda vier vazio ou 'nan' por erro de planilha
     if dados_memorando["{{setor_notificante}}"] == "":
         dados_memorando["{{setor_notificante}}"] = "NSP - NUCLEO DE SEGURANCA DO PACIENTE"
 
@@ -222,3 +221,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
                 file_name=f"{nome_base_arquivo}.pdf",
                 mime="application/pdf",
                 key=f"p_{index}",
+                help="Adicione fpdf2 ao seu arquivo requirements.txt para ativar PDFs nativos no Linux."
+            )
+        
