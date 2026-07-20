@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 import io
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from docx import Document
 
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
@@ -86,6 +86,10 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
     
     nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
+    
+    if nome_do_paciente.upper() == "PACIENTE":
+        return
+
     leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
     setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
     sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else ""
@@ -93,10 +97,12 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     setor_notificado_final = tratar_str_limpa(linha.iloc[14]) if num_colunas > 14 else onde_ocorreu
 
     num_memo_cru = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else ""
-    if num_memo_cru == "":
+    if num_memo_cru == "" or num_memo_cru.upper() == "Nº MEMO 01":
         num_memo_cru = "S-N"
         
     email_destino = tratar_str_limpa(linha.iloc[21]) if num_colunas > 21 else ""
+    if email_destino.upper() == "EMAIL_SETOR":
+        return
 
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
@@ -129,10 +135,11 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         "{{data_envio}}": data_extenso_envio
     }
     
-    hora_atual = datetime.now().hour
+    fuso_brasilia = timezone(timedelta(hours=-3))
+    hora_atual = datetime.now(fuso_brasilia).hour
     saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
     
-    # Montagem do texto do Ezequias limpo e estruturado
+    # 🎯 CORRIGIDO: Incluído tanto o número do memorando quanto o número da notificação de forma clara no corpo do e-mail
     corpo_email = (
         f"{saudacao},\n\n"
         f"Segue em Anexo o Memorando Nº {num_memo_cru} para ser analisado e respondido "
@@ -140,13 +147,14 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para "
         f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens "
         f"via e-mail sem arquivo como resposta.\n\n"
-        f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP.\n\n"
+        f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP:\n"
+        f"• Memorando: Nº {num_memo_cru}\n"
+        f"• Notificação: Nº {num_notif}\n\n"
         f"Atenciosamente,\n"
         f"Ezequias S. Santos\n"
         f"Agente Administrativo"
     )
 
-    # Nova estrutura de colunas: Nome, Baixar arquivo Word, Baixar formato Word para PDF e Caixinha de Cópia do e-mail
     col_nome, col_word, col_pdf, col_copiar = st.columns([1.5, 0.8, 0.8, 1.8])
     
     with col_nome:
@@ -178,7 +186,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         )
         
     with col_copiar:
-        # 🎯 SOLUÇÃO DA TRAVA DO CHROME: Caixinha nativa com botão de cópia automática em 1 clique
         st.code(corpo_email, language="text")
         
     st.markdown("---")
@@ -186,9 +193,9 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel, header=None)
     
-    if len(df) > 1 and ("STATUS" in str(df.iloc[1, 1]).upper() or str(df.iloc[1, 0]) == "1"):
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0]) == "1"):
         df = df.iloc[1:]
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[2, 1]).upper() or str(df.iloc[2, 0]) == "1"):
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1]) == "1"):
         df = df.iloc[2:]
         
     data_extenso_envio = obter_data_por_extenso(data_selecionada)
@@ -202,7 +209,7 @@ if arquivo_excel:
     
     st.success(f"📋 Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
     
-    for index, linha in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio)
+    for index, line in df.iterrows():
+        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio)
 else:
     st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
