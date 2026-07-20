@@ -2,11 +2,13 @@ import os
 import pandas as pd
 import streamlit as st
 import io
-import zipfile
 from docx import Document
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄")
-st.title("📄 Emissor de Memorandos - Hospital Dr. Jackson Lago")
+st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
+st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 
 arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
 caminho_modelo = "modelo_memorando.docx"
@@ -39,10 +41,32 @@ def formatar_data_br(valor):
     except:
         return str(valor)
 
+def converter_docx_para_pdf_bytes(doc):
+    """Extrai o texto estruturado do Word e compila em PDF de forma nativa e estável."""
+    pdf_buffer = io.BytesIO()
+    pdf = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    estilo_normal = ParagraphStyle('TextoNormal', parent=styles['Normal'], fontSize=11, leading=14)
+    estilo_negrito = ParagraphStyle('TextoNegrito', parent=styles['Normal'], fontSize=11, leading=14, fontName='Helvetica-Bold')
+    
+    # Adiciona o conteúdo textual preservando parágrafos simples
+    for paragrafo in doc.paragraphs:
+        texto = paragrafo.text.strip()
+        if texto:
+            if "MEMO:" in texto or "DE:" in texto or "PARA:" in texto or "ASSUNTO:" in texto:
+                story.append(Paragraph(texto, estilo_negrito))
+            else:
+                story.append(Paragraph(texto, estilo_normal))
+            story.append(Spacer(1, 8))
+            
+    pdf.build(story)
+    pdf_buffer.seek(0)
+    return pdf_buffer.getvalue()
+
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
-    
-    # Remove espaços invisíveis das colunas
     df.columns = df.columns.str.strip()
     
     # Identificação automática da coluna de paciente
@@ -55,86 +79,84 @@ if arquivo_excel:
     if not coluna_paciente:
         coluna_paciente = df.columns[0]
         
-    # Limpa linhas inválidas
     df = df.dropna(subset=[coluna_paciente])
     df = df[df[coluna_paciente].astype(str).str.strip() != ""]
     
-    st.success(f"📋 Planilha validada com sucesso! {len(df)} memorandos prontos. (Coluna identificada: '{coluna_paciente}')")
+    st.success(f"📋 Planilha validada! {len(df)} registros encontrados. Confira e baixe individualmente abaixo:")
     
-    if st.button("🚀 Compactar e Gerar Todos os Memorandos (.ZIP)"):
-        # Cria um arquivo ZIP na memória do computador para juntar os arquivos
-        arquivo_zip_memoria = io.BytesIO()
+    # Cria uma lista limpa e organizada na tela
+    for index, linha in df.iterrows():
+        nome_do_paciente = str(linha[coluna_paciente]).strip()
         
-        # Barra de progresso visual para você acompanhar os 113 documentos
-        barra_progresso = st.progress(0)
-        status_texto = st.empty()
+        # Extrai variáveis do nome do arquivo padronizado
+        num_memo_cru = str(linha.get("numero_memorando", "S-N")).strip()
+        num_memo = num_memo_cru.replace("NSP", "").replace("Memo", "").replace("MEMO", "").replace("/", "-").strip()
         
-        with zipfile.ZipFile(arquivo_zip_memoria, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for index, linha in df.iterrows():
-                # Atualiza a barra de progresso na tela
-                percentual_concluido = (index + 1) / len(df)
-                barra_progresso.progress(percentual_concluido)
-                
-                doc = Document(caminho_modelo)
-                nome_do_paciente = str(linha[coluna_paciente]).strip()
-                status_texto.text(f"Processando ({index + 1}/{len(df)}): {nome_do_paciente}")
-                
-                # Lógica para marcar 'X' nos turnos
-                turno_planilha = str(linha.get("turno", "")).strip().upper()
-                marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
-                marca_tarde = "X" if "TARDE" in turno_planilha else " "
-                marca_noite = "X" if "NOITE" in turno_planilha else " "
-                
-                # Tratamento de datas brasileiras
-                dt_notif = formatar_data_br(linha.get("data_notificacao", ""))
-                dt_ocorr = formatar_data_br(linha.get("data_ocorrencia", ""))
-                
-                # Mapeamento completo das tags do Word
-                dados_memorando = {
-                    "{{numero_memorando}}": str(linha.get("numero_memorando", "")),
-                    "{{gestor}}": str(linha.get("Gestor 01", "")),
-                    "{{setor}}": str(linha.get("SETOR NOTIFICADO", "")),
-                    "{{notificacao_n}}": str(linha.get("notificacao_n", "")),
-                    "{{data_notificacao}}": dt_notif,
-                    "{{data_ocorrencia}}": dt_ocorr,
-                    "{{localizacao}}": str(linha.get("localizacao", "")),
-                    "{{tipo_incidente}}": str(linha.get("tipo_incidente", "")),
-                    "{{classificacao_incidente}}": str(linha.get("classificacao_incidente", "")),
-                    "{{descricao_notificacao}}": str(linha.get("descricao_notificacao", "")),
-                    "{{nome_paciente}}": nome_do_paciente,
-                    "{{leito}}": str(linha.get("leito", "")),
-                    "{{setor_notificante}}": str(linha.get("setor_notificante", "")),
-                    "{{sugestao}}": str(linha.get("sugestao", "")),
-                    
-                    # Tags dos turnos
-                    "{{m}}": marca_manha,
-                    "{{t}}": marca_tarde,
-                    "{{n}}": marca_noite
-                }
-                
-                # Aplica as alterações sem afetar os logotipos corporativos
-                substituir_texto_protegendo_logos(doc, dados_memorando)
-                
-                # Salva o arquivo temporário diretamente na memória
-                num_memo = str(linha.get("numero_memorando", f"S-N-{index}")).replace("/", "-")
-                nome_arquivo_word = f"Memo_{num_memo}_{nome_do_paciente}.docx"
-                
-                # Converte o documento para bytes e adiciona ao ZIP
-                doc_stream = io.BytesIO()
-                doc.save(doc_stream)
-                doc_stream.seek(0)
-                zip_file.writestr(nome_arquivo_word, doc_stream.getvalue())
+        num_notif = str(linha.get("notificacao_n", "S-N")).strip()
         
-        # Prepara o arquivo final compactado para o download
-        arquivo_zip_memoria.seek(0)
-        status_texto.text("🎉 Todos os 113 memorandos foram empacotados com sucesso!")
+        # Estrutura o nome exatamente igual à sua imagem de referência
+        nome_base_arquivo = f"MEMORANDO Nº {num_memo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
         
-        # Cria O ÚNICO botão de download na tela
-        st.download_button(
-            label="📥 BAIXAR TODOS OS 113 MEMORANDOS (.ZIP)",
-            data=arquivo_zip_memoria,
-            file_name="Todos_Os_Memorandos_NSP.zip",
-            mime="application/zip",
-            use_container_width=True
-        )
-        st.balloons()
+        # Processamento individual em memória
+        doc = Document(caminho_modelo)
+        
+        turno_planilha = str(linha.get("turno", "")).strip().upper()
+        marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
+        marca_tarde = "X" if "TARDE" in turno_planilha else " "
+        marca_noite = "X" if "NOITE" in turno_planilha else " "
+        
+        dados_memorando = {
+            "{{numero_memorando}}": num_memo_cru,
+            "{{gestor}}": str(linha.get("Gestor 01", "")),
+            "{{setor}}": str(linha.get("SETOR NOTIFICADO", "")),
+            "{{notificacao_n}}": num_notif,
+            "{{data_notificacao}}": formatar_data_br(linha.get("data_notificacao", "")),
+            "{{data_ocorrencia}}": formatar_data_br(linha.get("data_ocorrencia", "")),
+            "{{localizacao}}": str(linha.get("localizacao", "")),
+            "{{tipo_incidente}}": str(linha.get("tipo_incidente", "")),
+            "{{classificacao_incidente}}": str(linha.get("classificacao_incidente", "")),
+            "{{descricao_notificacao}}": str(linha.get("descricao_notificacao", "")),
+            "{{nome_paciente}}": nome_do_paciente,
+            "{{leito}}": str(linha.get("leito", "")),
+            "{{setor_notificante}}": str(linha.get("setor_notificante", "")),
+            "{{sugestao}}": str(linha.get("sugestao", "")),
+            "{{m}}": marca_manha,
+            "{{t}}": marca_tarde,
+            "{{n}}": marca_noite
+        }
+        
+        substituir_texto_protegendo_logos(doc, dados_memorando)
+        
+        # Transforma o arquivo WORD modificado em memória para download imediato
+        word_buffer = io.BytesIO()
+        doc.save(word_buffer)
+        word_buffer.seek(0)
+        
+        # Renderiza o layout de colunas no Streamlit para os botões ficarem lado a lado
+        col_nome, col_word, col_pdf = st.columns([3, 1, 1])
+        
+        with col_nome:
+            st.markdown(f"**🔹 {nome_do_paciente}**")
+            
+        with col_word:
+            st.download_button(
+                label="📝 Baixar WORD",
+                data=word_buffer.getvalue(),
+                file_name=f"{nome_base_arquivo}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key=f"word_{index}"
+            )
+            
+        with col_pdf:
+            try:
+                pdf_bytes = converter_docx_para_pdf_bytes(doc)
+                st.download_button(
+                    label="📕 Baixar PDF",
+                    data=pdf_bytes,
+                    file_name=f"{nome_base_arquivo}.pdf",
+                    mime="application/pdf",
+                    key=f"pdf_{index}"
+                )
+            except Exception as e:
+                st.error("Erro ao gerar PDF")
+        st.divider()
