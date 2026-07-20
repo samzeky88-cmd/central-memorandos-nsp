@@ -2,9 +2,8 @@ import os
 import pandas as pd
 import streamlit as st
 import io
-import subprocess
-import time
 from docx import Document
+from fpdf import FPDF
 
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
@@ -40,43 +39,44 @@ def formatar_data_br(valor):
     except:
         return str(valor)
 
-def converter_docx_para_pdf_via_sistema(caminho_docx, index):
-    """Utiliza o LibreOffice de forma isolada e robusta para evitar erros no Linux do Streamlit."""
-    try:
-        user_profile_dir = f"/tmp/libreoffice_profile_{index}_{int(time.time())}"
-        
-        comando = [
-            "soffice",
-            f"-env:UserInstallation=file://{user_profile_dir}",
-            "--headless",
-            "--nofirststartwizard",
-            "--norestore",
-            "--convert-to",
-            "pdf",
-            "--outdir",
-            "/tmp",
-            caminho_docx
-        ]
-        
-        subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=30)
-        
-        nome_pdf_gerado = os.path.join("/tmp", os.path.basename(caminho_docx).replace(".docx", ".pdf"))
-        
-        if os.path.exists(nome_pdf_gerado):
-            with open(nome_pdf_gerado, "rb") as f:
-                dados_pdf = f.read()
-            os.remove(nome_pdf_gerado)
-            subprocess.run(["rm", "-rf", user_profile_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return dados_pdf
-    except Exception as e:
-        pass
-    return None
+def gerar_pdf_nativo_memoria(dados):
+    """Gera um PDF estruturado de forma nativa e rápida em memória utilizando FPDF2."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_margins(20, 20, 20)
+    
+    # Configura fontes padrão seguras
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 8, "HOSPITAL DR. JACKSON LAGO", ln=True, align="C")
+    pdf.cell(0, 8, "NÚCLEO DE SEGURANÇA DO PACIENTE - NSP", ln=True, align="C")
+    pdf.ln(10)
+    
+    pdf.set_font("Helvetica", "", 11)
+    
+    # Cabeçalho do Memorando textual
+    pdf.write(6, "MEMORANDO Nº: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{numero_memorando}}']}\n"); pdf.set_font("Helvetica", "", 11)
+    pdf.write(6, "PARA: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{gestor}}']} {dados['{{setor}}']}\n"); pdf.set_font("Helvetica", "", 11)
+    pdf.write(6, "NOTIFICAÇÃO Nº: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{notificacao_n}}']}\n"); pdf.set_font("Helvetica", "", 11)
+    pdf.write(6, "DATA DA OCORRÊNCIA: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{data_ocorrencia}}']}\n"); pdf.set_font("Helvetica", "", 11)
+    pdf.write(6, "PACIENTE: "); pdf.set_font("Helvetica", "B", 11); pdf.write(6, f"{dados['{{nome_paciente}}']}\n"); pdf.set_font("Helvetica", "", 11)
+    pdf.ln(6)
+    
+    # Corpo do texto estruturado
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 6, "DESCRIÇÃO DA NOTIFICAÇÃO:", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    
+    # Corrige problemas comuns de caracteres especiais (como acentos) no PDF nativo
+    txt_descricao = str(dados['{{descricao_notificacao}}']).encode('latin-1', 'replace').decode('latin-1')
+    pdf.multi_cell(0, 6, txt_descricao)
+    
+    # Retorna o arquivo compilado em formato de bytes
+    return pdf.output()
 
 @st.fragment
-def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notificacao_forcada):
+def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, nome_col_notif):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
-    # Coleta inteligente do número do memorando nas duas colunas possíveis
     memo_01 = str(linha.get("Nº Memo 01", "")).strip()
     memo_02 = str(linha.get("Nº Memo 02", "")).strip()
     
@@ -85,17 +85,16 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notifi
     else:
         num_memo_cru = memo_01
         
-    # 🔥 Força a leitura do número da notificação pela primeira coluna (Coluna A) para evitar o 'nan'
-    num_notif = str(linha[col_notificacao_forcada]).strip()
+    # Coleta de forma limpa o número da primeira coluna
+    num_notif = str(linha.get(nome_col_notif, "S-N")).strip()
     if num_notif.lower() == "nan" or num_notif == "":
         num_notif = "S-N"
     
-    # Padronização do nome do arquivo
+    # Padronização exata dos nomes dos arquivos para o seu computador
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     num_notif_limpo = num_notif.replace("Nº", "").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif_limpo}_I_NSP"
     
-    # Tratamento automático para marcação dos turnos
     turno_planilha = str(linha.get("turno", "")).strip().upper()
     marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
     marca_tarde = "X" if "TARDE" in turno_planilha else " "
@@ -142,36 +141,22 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notifi
         )
         
     with col_pdf:
-        if st.button("⚡ Gerar PDF", key=f"p_btn_{index}"):
-            with st.spinner("Processando..."):
-                doc_pdf = Document(caminho_modelo)
-                substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
-                
-                caminho_temp = f"/tmp/doc_{index}_{int(time.time())}.docx"
-                doc_pdf.save(caminho_temp)
-                
-                pdf_bytes = converter_docx_para_pdf_via_sistema(caminho_temp, index)
-                
-                if os.path.exists(caminho_temp):
-                    os.remove(caminho_temp)
-                    
-                if pdf_bytes:
-                    st.download_button(
-                        label="📥 Salvar PDF",
-                        data=pdf_bytes,
-                        file_name=f"{nome_base_arquivo}.pdf",
-                        mime="application/pdf",
-                        key=f"dl_pdf_{index}"
-                    )
-                else:
-                    st.error("Erro temporário no servidor. Clique em 'Gerar PDF' novamente.")
+        # Geração instantânea e leve direto em memória Python (Não trava mais)
+        pdf_data = gerar_pdf_nativo_memoria(dados_memorando)
+        st.download_button(
+            label="📕 Baixar PDF",
+            data=bytes(pdf_data),
+            file_name=f"{nome_base_arquivo}.pdf",
+            mime="application/pdf",
+            key=f"p_{index}"
+        )
     st.markdown("---")
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     
-    # Captura o nome original da primeira coluna (Coluna A) para usar como indexador da Notificação
-    coluna_notificacao_forcada = df.columns[0]
+    # 🎯 CORRIGIDO: Captura o nome exato da primeira coluna da planilha (Coluna A) de forma isolada
+    nome_col_notif = df.columns[0]
     
     df.columns = df.columns.str.strip()
     
@@ -182,7 +167,7 @@ if arquivo_excel:
             coluna_paciente = col
             
     if not coluna_paciente: 
-        coluna_paciente = df.columns[1] # Assume a segunda coluna caso falhe
+        coluna_paciente = df.columns[1]
         
     df = df.dropna(subset=[coluna_paciente])
     df = df[df[coluna_paciente].astype(str).str.strip() != ""]
@@ -190,4 +175,4 @@ if arquivo_excel:
     st.success(f"📋 Lista de verificação pronta! {len(df)} registros encontrados.")
     
     for index, linha in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, coluna_notificacao_forcada)
+        renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, nome_col_notif)
