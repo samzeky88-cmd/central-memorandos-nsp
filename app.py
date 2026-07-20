@@ -2,10 +2,8 @@ import os
 import pandas as pd
 import streamlit as st
 import io
+import subprocess
 from docx import Document
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
@@ -41,35 +39,28 @@ def formatar_data_br(valor):
     except:
         return str(valor)
 
-def converter_docx_para_pdf_bytes(doc):
-    """Extrai o texto estruturado do Word e compila em PDF de forma nativa e estável."""
-    pdf_buffer = io.BytesIO()
-    pdf = SimpleDocTemplate(pdf_buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
-    story = []
-    
-    styles = getSampleStyleSheet()
-    estilo_normal = ParagraphStyle('TextoNormal', parent=styles['Normal'], fontSize=11, leading=14)
-    estilo_negrito = ParagraphStyle('TextoNegrito', parent=styles['Normal'], fontSize=11, leading=14, fontName='Helvetica-Bold')
-    
-    # Adiciona o conteúdo textual preservando parágrafos simples
-    for paragrafo in doc.paragraphs:
-        texto = paragrafo.text.strip()
-        if texto:
-            if "MEMO:" in texto or "DE:" in texto or "PARA:" in texto or "ASSUNTO:" in texto:
-                story.append(Paragraph(texto, estilo_negrito))
-            else:
-                story.append(Paragraph(texto, estilo_normal))
-            story.append(Spacer(1, 8))
-            
-    pdf.build(story)
-    pdf_buffer.seek(0)
-    return pdf_buffer.getvalue()
+def converter_docx_para_pdf_via_sistema(caminho_docx):
+    """Utiliza o LibreOffice do Linux para gerar um PDF idêntico ao Word sem corromper imagens."""
+    try:
+        # Executa a conversão headless silenciosa no Linux do Streamlit
+        comando = ["soffice", "--headless", "--convert-to", "pdf", caminho_docx]
+        subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        
+        nome_pdf_gerado = caminho_docx.replace(".docx", ".pdf")
+        if os.path.exists(nome_pdf_gerado):
+            with open(nome_pdf_gerado, "rb") as f:
+                dados_pdf = f.read()
+            os.remove(nome_pdf_gerado)  # Limpa o PDF temporário do servidor
+            return dados_pdf
+    except Exception as e:
+        pass
+    return None
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     df.columns = df.columns.str.strip()
     
-    # Identificação automática da coluna de paciente
+    # Identificação automática da coluna de paciente baseada na sua planilha
     coluna_paciente = None
     for col in df.columns:
         if col.upper() == "PACIENTE" or "PACIENTE" in col.upper() or "NOME" in col.upper():
@@ -79,27 +70,27 @@ if arquivo_excel:
     if not coluna_paciente:
         coluna_paciente = df.columns[0]
         
+    # Limpeza de linhas inválidas ou fantasmas
     df = df.dropna(subset=[coluna_paciente])
     df = df[df[coluna_paciente].astype(str).str.strip() != ""]
     
     st.success(f"📋 Planilha validada! {len(df)} registros encontrados. Confira e baixe individualmente abaixo:")
     
-    # Cria uma lista limpa e organizada na tela
     for index, linha in df.iterrows():
         nome_do_paciente = str(linha[coluna_paciente]).strip()
         
-        # Extrai variáveis do nome do arquivo padronizado
+        # Extrai e limpa as variáveis para construir o nome do arquivo padronizado
         num_memo_cru = str(linha.get("numero_memorando", "S-N")).strip()
         num_memo = num_memo_cru.replace("NSP", "").replace("Memo", "").replace("MEMO", "").replace("/", "-").strip()
-        
         num_notif = str(linha.get("notificacao_n", "S-N")).strip()
         
-        # Estrutura o nome exatamente igual à sua imagem de referência
+        # Nome do arquivo padronizado exatamente igual ao modelo solicitado
         nome_base_arquivo = f"MEMORANDO Nº {num_memo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
         
-        # Processamento individual em memória
+        # Inicia uma cópia limpa do Word em disco para a conversão
         doc = Document(caminho_modelo)
         
+        # Lógica para marcar 'X' ou deixar espaço em branco nos turnos
         turno_planilha = str(linha.get("turno", "")).strip().upper()
         marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
         marca_tarde = "X" if "TARDE" in turno_planilha else " "
@@ -125,15 +116,26 @@ if arquivo_excel:
             "{{n}}": marca_noite
         }
         
+        # Substituição cirúrgica preservando imagens do cabeçalho
         substituir_texto_protegendo_logos(doc, dados_memorando)
         
-        # Transforma o arquivo WORD modificado em memória para download imediato
-        word_buffer = io.BytesIO()
-        doc.save(word_buffer)
-        word_buffer.seek(0)
+        # Salva o arquivo Word temporário para processamento do LibreOffice
+        caminho_docx_temp = f"temp_{index}.docx"
+        doc.save(caminho_docx_temp)
         
-        # Renderiza o layout de colunas no Streamlit para os botões ficarem lado a lado
-        col_nome, col_word, col_pdf = st.columns([3, 1, 1])
+        # Carrega os bytes do Word criado para o botão correspondente
+        with open(caminho_docx_temp, "rb") as f:
+            word_bytes = f.read()
+            
+        # Converte para PDF nativo de forma paralela e estável
+        pdf_bytes = converter_docx_para_pdf_via_sistema(caminho_docx_temp)
+        
+        # Deleta o arquivo Word temporário do servidor imediatamente
+        if os.path.exists(caminho_docx_temp):
+            os.remove(caminho_docx_temp)
+            
+        # Renderização organizada dos botões lado a lado na interface
+        col_nome, col_word, col_pdf = st.columns([2, 1, 1])
         
         with col_nome:
             st.markdown(f"**🔹 {nome_do_paciente}**")
@@ -141,15 +143,14 @@ if arquivo_excel:
         with col_word:
             st.download_button(
                 label="📝 Baixar WORD",
-                data=word_buffer.getvalue(),
+                data=word_bytes,
                 file_name=f"{nome_base_arquivo}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 key=f"word_{index}"
             )
             
         with col_pdf:
-            try:
-                pdf_bytes = converter_docx_para_pdf_bytes(doc)
+            if pdf_bytes:
                 st.download_button(
                     label="📕 Baixar PDF",
                     data=pdf_bytes,
@@ -157,6 +158,6 @@ if arquivo_excel:
                     mime="application/pdf",
                     key=f"pdf_{index}"
                 )
-            except Exception as e:
-                st.error("Erro ao gerar PDF")
+            else:
+                st.warning("⚠️ Aguardando LibreOffice")
         st.divider()
