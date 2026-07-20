@@ -72,10 +72,10 @@ def obter_data_por_extenso(dt):
 
 @st.fragment
 def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
-    # Coleta posicional estrita calibrada pelos 4 prints reais enviados
+    # Coleta posicional estrita baseada nos prints reais enviados (A=0, B=1, C=2...)
     num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
     
-    # Ignora as linhas de cabeçalhos repetidos da tabela do Excel
+    # Ignora linhas que contenham títulos repetidos da tabela do Excel
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
         return
 
@@ -87,7 +87,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
     descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
     
-    # Mapeamento do segundo bloco de colunas (J, K, L, M, N, O)
+    # Mapeamento do segundo bloco de colunas da imagem (J, K, L, M, N, O)
     nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
     leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
     setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
@@ -133,7 +133,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         "{{data_envio}}": data_extenso_envio
     }
     
-    # --- CONFIGURAÇÃO DO TEXTO INSTITUCIONAL DO GMAIL DO EZEQUIAS ---
+    # --- CONFIGURAÇÃO DO TEXTO PADRÃO DO GMAIL DO EZEQUIAS ---
     hora_atual = datetime.now().hour
     saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
     
@@ -203,13 +203,13 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     st.markdown("---")
 
 if arquivo_excel:
-    # Carrega o arquivo sem assumir strings para evitar perda de alinhamento nas colunas da direita
+    # Carrega o arquivo sem assumir cabeçalhos fixos para evitar desalinhamento nas colunas da direita
     df = pd.read_excel(arquivo_excel, header=None)
     
-    # Ignora as linhas iniciais de cabeçalhos de texto se existirem
-    if len(df) > 1 and ("STATUS" in str(df.iloc[0, 1]).upper() or str(df.iloc[0, 0]) == "1"):
+    # Filtra e remove linhas de títulos iniciais da planilha se existirem
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0, 0]) == "1"):
         df = df.iloc[1:]
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[1, 1]).upper() or str(df.iloc[1, 0]) == "1"):
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0, 0]) == "1"):
         df = df.iloc[2:]
         
     data_extenso_envio = obter_data_por_extenso(data_selecionada)
