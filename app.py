@@ -70,8 +70,8 @@ def obter_data_por_extenso(dt):
     }
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
-# Limpa o cache da lista se você alterar o arquivo excel enviado
 if arquivo_excel:
+    # Nome da chave corrigido para bater exatamente em todas as linhas do código
     nome_chave_cache = f"dados_memos_{arquivo_excel.name}_{data_selecionada.strftime('%Y%m%d')}"
     
     if nome_chave_cache not in st.session_state:
@@ -92,7 +92,7 @@ if arquivo_excel:
                 elif "LEITO" in c_upper: mapa_colunas["LEITO"] = col
                 elif "SUGEST" in c_upper: mapa_colunas["SUGESTAO"] = col
 
-            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[1])
+            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns)
             df.columns = df.columns.str.strip()
             df = df.dropna(subset=[coluna_paciente])
             df = df[df[coluna_paciente].astype(str).str.strip() != ""]
@@ -100,13 +100,12 @@ if arquivo_excel:
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
             arquivos_processados = []
             
-            # Geração segura e unificada do lote na memória do servidor
             for index, line in df.iterrows():
                 nome_do_paciente = str(line[coluna_paciente]).strip()
                 
-                try: memo_01 = str(df_original.iloc[index, 15]).strip()
+                try: memo_01 = str(df_original.iloc[index, 14]).strip()
                 except: memo_01 = ""
-                try: memo_02 = str(df_original.iloc[index, 19]).strip()
+                try: memo_02 = str(df_original.iloc[index, 18]).strip()
                 except: memo_02 = ""
                 
                 if memo_01 == "" or memo_01.lower() == "nan":
@@ -139,14 +138,13 @@ if arquivo_excel:
                     "{{descricao_notificacao}}": limpar_nan(line.get(mapa_colunas.get("DESC", ""), "")),
                     "{{nome_paciente}}": nome_do_paciente,
                     "{{leito}}": limpar_numero_float(line.get(mapa_colunas.get("LEITO", ""), "")),
-                    "{{sugestao}}": limpar_nan(line.get(mapa_colunas.get("SUGESTAO", ""), "")),
+                    "{{sugestao}}": limpar_nan(line.get("SUGESTAO", "")),
                     "{{m}}": marca_manha,
                     "{{t}}": marca_tarde,
                     "{{n}}": marca_noite,
                     "{{data_envio}}": data_extenso_envio 
                 }
                 
-                # Monta os bytes estruturados do Word
                 doc_instancia = Document(caminho_modelo)
                 substituir_texto_protegendo_logos(doc_instancia, dados_memorando)
                 buffer_bytes = io.BytesIO()
@@ -159,9 +157,9 @@ if arquivo_excel:
                     "conteudo": buffer_bytes.getvalue()
                 })
                 
-            st.session_state[nome_key_cache] = arquivos_processados
+            # 🔥 FIXADO: Salva usando o nome de variável correto casando com o topo
+            st.session_state[nome_chave_cache] = arquivos_processados 
 
-    # Exibe a listagem definitiva amarrada na memória estável da sessão
     if nome_chave_cache in st.session_state:
         st.success(f"📋 Lista de verificação pronta! {len(st.session_state[nome_chave_cache])} registros processados com sucesso.")
         
