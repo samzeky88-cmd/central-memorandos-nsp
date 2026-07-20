@@ -71,26 +71,39 @@ def obter_data_por_extenso(dt):
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
 if arquivo_excel:
-    # Nome da chave corrigido para bater exatamente em todas as linhas do código
     nome_chave_cache = f"dados_memos_{arquivo_excel.name}_{data_selecionada.strftime('%Y%m%d')}"
     
     if nome_chave_cache not in st.session_state:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
             df = pd.read_excel(arquivo_excel)
-            df_original = df.copy()
             
+            # 🔍 Varredura dinâmica unificada com suporte total a acentuações ampliadas
             mapa_colunas = {}
             for col in df.columns:
-                c_upper = str(col).strip().upper()
-                if col == "Nº": mapa_colunas["NOTIF"] = col
-                elif "PACIENTE" in c_upper or "NOME" in c_upper: mapa_colunas["PACIENTE"] = col
-                elif "DATA" in c_upper and "NOTIF" in c_upper: mapa_colunas["DATA_NOTIF"] = col
-                elif "DATA" in c_upper and "OCORR" in c_upper: mapa_colunas["DATA_OCORR"] = col
-                elif "TURNO" in c_upper: mapa_colunas["TURNO"] = col
-                elif "TIPO" in c_upper: mapa_colunas["TIPO"] = col
-                elif "DESC" in c_upper or "RESUMO" in c_upper: mapa_colunas["DESC"] = col
-                elif "LEITO" in c_upper: mapa_colunas["LEITO"] = col
-                elif "SUGEST" in c_upper: mapa_colunas["SUGESTAO"] = col
+                c_upper = str(col).strip().upper().replace("º", "").replace("°", "").replace("Ã", "A").replace("Õ", "O").replace("Ç", "C")
+                
+                if col == "Nº": 
+                    mapa_colunas["NOTIF"] = col
+                elif "PACIENTE" in c_upper or "NOME" in c_upper: 
+                    mapa_colunas["PACIENTE"] = col
+                elif "MEMO" in c_upper and ("1" in c_upper or "01" in c_upper): 
+                    mapa_colunas["MEMO01"] = col
+                elif "MEMO" in c_upper and ("2" in c_upper or "02" in c_upper): 
+                    mapa_colunas["MEMO02"] = col
+                elif "DATA" in c_upper and "NOTIF" in c_upper: 
+                    mapa_colunas["DATA_NOTIF"] = col
+                elif "DATA" in c_upper and "OCORR" in c_upper: 
+                    mapa_colunas["DATA_OCORR"] = col
+                elif "TURNO" in c_upper: 
+                    mapa_colunas["TURNO"] = col
+                elif "TIPO" in c_upper: 
+                    mapa_colunas["TIPO"] = col
+                elif "DESC" in c_upper or "RESUMO" in c_upper: 
+                    mapa_colunas["DESC"] = col
+                elif "LEITO" in c_upper: 
+                    mapa_colunas["LEITO"] = col
+                elif "SUGEST" in c_upper or "SUGESTAO" in c_upper: 
+                    mapa_colunas["SUGESTAO"] = col
 
             coluna_paciente = mapa_colunas.get("PACIENTE", df.columns)
             df.columns = df.columns.str.strip()
@@ -103,10 +116,8 @@ if arquivo_excel:
             for index, line in df.iterrows():
                 nome_do_paciente = str(line[coluna_paciente]).strip()
                 
-                try: memo_01 = str(df_original.iloc[index, 14]).strip()
-                except: memo_01 = ""
-                try: memo_02 = str(df_original.iloc[index, 18]).strip()
-                except: memo_02 = ""
+                memo_01 = str(line.get(mapa_colunas.get("MEMO01", ""), "")).strip()
+                memo_02 = str(line.get(mapa_colunas.get("MEMO02", ""), "")).strip()
                 
                 if memo_01 == "" or memo_01.lower() == "nan":
                     num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" else "S-N"
@@ -114,7 +125,8 @@ if arquivo_excel:
                     num_memo_cru = memo_01
                     
                 num_notif = limpar_numero_float(line.get(mapa_colunas.get("NOTIF", ""), index + 1))
-                if num_notif == "": num_notif = str(index + 1)
+                if num_notif == "": 
+                    num_notif = str(index + 1)
                 
                 num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
                 nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
@@ -138,7 +150,10 @@ if arquivo_excel:
                     "{{descricao_notificacao}}": limpar_nan(line.get(mapa_colunas.get("DESC", ""), "")),
                     "{{nome_paciente}}": nome_do_paciente,
                     "{{leito}}": limpar_numero_float(line.get(mapa_colunas.get("LEITO", ""), "")),
-                    "{{sugestao}}": limpar_nan(line.get("SUGESTAO", "")),
+                    
+                    # 🎯 Captura calibrada para a coluna de Sugestão
+                    "{{sugestao}}": limpar_nan(line.get(mapa_colunas.get("SUGESTAO", ""), "")),
+                    
                     "{{m}}": marca_manha,
                     "{{t}}": marca_tarde,
                     "{{n}}": marca_noite,
@@ -157,7 +172,6 @@ if arquivo_excel:
                     "conteudo": buffer_bytes.getvalue()
                 })
                 
-            # 🔥 FIXADO: Salva usando o nome de variável correto casando com o topo
             st.session_state[nome_chave_cache] = arquivos_processados 
 
     if nome_chave_cache in st.session_state:
