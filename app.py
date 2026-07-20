@@ -207,9 +207,9 @@ if arquivo_excel:
     df = pd.read_excel(arquivo_excel, header=None)
     
     # Filtra e remove linhas de títulos iniciais da planilha se existirem
-    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0, 0]) == "1"):
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0, 1]).upper() or str(df.iloc[0, 0]) == "1"):
         df = df.iloc[1:]
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0, 0]) == "1"):
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1, 1]).upper() or str(df.iloc[1, 0]) == "1"):
         df = df.iloc[2:]
         
     data_extenso_envio = obter_data_por_extenso(data_selecionada)
