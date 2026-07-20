@@ -38,7 +38,6 @@ def formatar_data_br(valor):
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
         v_str = str(valor).strip()
-        # Se vier com hora do Excel (Ex: 2026-06-25 00:00:00), limpa e mantém só a data
         if " " in v_str:
             v_str = v_str.split(" ")[0]
         if "-" in v_str:
@@ -71,7 +70,7 @@ def limpar_numero_float(valor):
 def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colunas):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
-    # Coleta inteligente do número do memorando nas duas colunas possíveis
+    # 🔍 BUSCA AVANÇADA DE MEMORANDO NAS COLUNAS MAPEADAS
     memo_01 = str(linha.get(mapa_colunas.get("MEMO01", ""), "")).strip()
     memo_02 = str(linha.get(mapa_colunas.get("MEMO02", ""), "")).strip()
     
@@ -84,17 +83,16 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colun
     if num_notif == "":
         num_notif = str(index + 1)
     
-    # Padronização limpa do nome do arquivo final
+    # Padronização rigorosa e limpa do nome do arquivo final
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
     
-    # Lógica minuciosa para os turnos (Busca em maiúsculo na coluna certa)
+    # Lógica estável para os turnos
     turno_planilha = str(linha.get(mapa_colunas.get("TURNO", ""), "")).strip().upper()
     marca_manha = "X" if "MANH" in turno_planilha else " "
     marca_tarde = "X" if "TARD" in turno_planilha else " "
     marca_noite = "X" if "NOIT" in turno_planilha else " "
     
-    # Dicionário de tags aplicando o mapa inteligente de colunas
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
         "{{gestor}}": limpar_nan(linha.get(mapa_colunas.get("GESTOR", ""), "")),
@@ -154,25 +152,39 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colun
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     
-    # 🔍 Dicionário de Tradução Dinâmica para ignorar maiúsculas/minúsculas e acentos
+    # 🔍 Dicionário de Varredura Ampla para capturar todas as colunas
     mapa_colunas = {}
     for col in df.columns:
-        c_limpa = str(col).strip().upper().replace("Á", "A").replace("ÇÃO", "CAO").replace("Õ", "O").replace("Í", "I")
+        c_limpa = str(col).strip().upper().replace("Á", "A").replace("ÇÃO", "CAO").replace("Õ", "O").replace("Í", "I").replace("Ç", "C")
         
-        if col == "Nº": mapa_colunas["NOTIF"] = col
-        elif "PACIENTE" in c_limpa or "NOME" in c_limpa: mapa_colunas["PACIENTE"] = col
-        elif "MEMO 01" in c_limpa: mapa_colunas["MEMO01"] = col
-        elif "MEMO 02" in c_limpa: mapa_colunas["MEMO02"] = col
-        elif "GESTOR" in c_limpa: mapa_colunas["GESTOR"] = col
-        elif "SETOR NOTIFICADO" in c_limpa: mapa_colunas["SETOR_NOTIF"] = col
-        elif "DATA" in c_limpa and "NOTIF" in c_limpa: mapa_colunas["DATA_NOTIF"] = col
-        elif "DATA" in c_limpa and "OCORR" in c_limpa: mapa_colunas["DATA_OCORR"] = col
-        elif "TURNO" in c_limpa: mapa_colunas["TURNO"] = col
-        elif "TIPO" in c_limpa: mapa_colunas["TIPO"] = col
-        elif "DESC" in c_limpa or "RESUMO" in c_limpa: mapa_colunas["DESC"] = col
-        elif "LEITO" in c_limpa: mapa_colunas["LEITO"] = col
-        elif "SUGEST" in c_limpa: mapa_colunas["SUGESTAO"] = col
-        elif "ONDE OCORREU" in c_limpa: mapa_colunas["ONDE"] = col
+        if col == "Nº": 
+            mapa_colunas["NOTIF"] = col
+        elif "PACIENTE" in c_limpa or "NOME" in c_limpa: 
+            mapa_colunas["PACIENTE"] = col
+        elif "MEMO" in c_limpa and "01" in c_limpa: 
+            mapa_colunas["MEMO01"] = col
+        elif "MEMO" in c_limpa and "02" in c_limpa: 
+            mapa_colunas["MEMO02"] = col
+        elif "GESTOR" in c_limpa: 
+            mapa_colunas["GESTOR"] = col
+        elif "SETOR NOTIFICADO" in c_limpa: 
+            mapa_colunas["SETOR_NOTIF"] = col
+        elif "DATA" in c_limpa and "NOTIF" in c_limpa: 
+            mapa_colunas["DATA_NOTIF"] = col
+        elif "DATA" in c_limpa and "OCORR" in c_limpa: 
+            mapa_colunas["DATA_OCORR"] = col
+        elif "TURNO" in c_limpa: 
+            mapa_colunas["TURNO"] = col
+        elif "TIPO" in c_limpa: 
+            mapa_colunas["TIPO"] = col
+        elif "DESC" in c_limpa or "RESUMO" in c_limpa: 
+            mapa_colunas["DESC"] = col
+        elif "LEITO" in c_limpa: 
+            mapa_colunas["LEITO"] = col
+        elif "SUGEST" in c_limpa: 
+            mapa_colunas["SUGESTAO"] = col
+        elif "ONDE" in c_limpa or "OCORREU" in c_limpa: 
+            mapa_colunas["ONDE"] = col
 
     coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[1])
         
