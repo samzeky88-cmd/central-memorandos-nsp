@@ -1,3 +1,79 @@
+import os
+import pandas as pd
+import streamlit as st
+import io
+import urllib.parse
+from datetime import datetime
+from docx import Document
+
+st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
+st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
+
+st.markdown("### 🗓️ Configuração da Data de Envio")
+data_selecionada = st.date_input("Selecione a data que sairá no cabeçalho do Memorando:", datetime.now())
+
+arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
+caminho_modelo = "modelo_memorando.docx"
+
+def substituir_texto_protegendo_logos(doc, dicionario_tags):
+    """Substitui o texto alterando apenas os 'runs' para proteger imagens, rodapés e cabeçalhos."""
+    for paragrafo in doc.paragraphs:
+        for tag, valor in dicionario_tags.items():
+            if tag in paragrafo.text:
+                for run in paragrafo.runs:
+                    if tag in run.text:
+                        run.text = run.text.replace(tag, valor)
+                        
+    for tabela in doc.tables:
+        for linha in tabela.rows:
+            for celula in linha.cells:
+                for paragrafo in celula.paragraphs:
+                    for tag, valor in dicionario_tags.items():
+                        if tag in paragrafo.text:
+                            for run in paragrafo.runs:
+                                if tag in run.text:
+                                    run.text = run.text.replace(tag, valor)
+
+def formatar_data_br(valor):
+    """Garante que as datas sejam exibidas no formato brasileiro DD/MM/AAAA"""
+    try:
+        if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
+            return ""
+        return pd.to_datetime(valor).strftime("%d/%m/%Y")
+    except:
+        return str(valor).strip()
+
+def limpar_nan(valor):
+    """Substitui qualquer valor vazio ou 'nan' por uma linha em branco limpa"""
+    if pd.isna(valor) or str(valor).strip().lower() == "nan" or str(valor).strip() == "":
+        return ""
+    return str(valor).strip()
+
+def limpar_numero_float(valor):
+    """Remove o .0 de números inteiros vindos do Excel (ex: 886.0 vira 886)"""
+    if pd.isna(valor):
+        return ""
+    try:
+        if isinstance(float(valor), float):
+            v_str = str(valor).strip()
+            if v_str.endswith(".0"):
+                return str(int(float(v_str)))
+            return str(int(float(v_str)))
+        return str(valor).strip()
+    except:
+        v_str = str(valor).strip()
+        if v_str.endswith(".0"):
+            return v_str[:-2]
+        return v_str
+
+def obter_data_por_extenso(dt):
+    """Gera a data selecionada por extenso em português brasileiro (Ex: 20 de Julho de 2026)"""
+    meses = {
+        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+    }
+    return f"{dt.day} de {meses[dt.month]} de {dt.year}"
+
 # Execução principal após upload do arquivo
 if arquivo_excel:
     nome_chave_cache = f"dados_memos_{arquivo_excel.name}_{data_selecionada.strftime('%Y%m%d')}"
@@ -7,7 +83,6 @@ if arquivo_excel:
             try:
                 df = pd.read_excel(arquivo_excel, header=None)
                 
-                # Alerta caso a planilha esteja completamente em branco
                 if df.empty:
                     st.warning("⚠️ O arquivo Excel enviado está vazio.")
                     st.stop()
@@ -18,13 +93,10 @@ if arquivo_excel:
                 hora_atual = datetime.now().hour
                 saudacao = "Bom dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
                 num_colunas_df = len(df.columns)
-                
-                # Índice de busca fixado para evitar erros de escopo
                 c_busca = 0 
                 
                 for index, line in df.iterrows():
                     try:
-                        # Ignora linhas que não possuem dados válidos na Coluna B
                         if index not in df.index or len(df.iloc[index]) < 2:
                             continue
                             
@@ -34,11 +106,9 @@ if arquivo_excel:
                         if pd.isna(val_paciente) or texto_paciente_teste == "" or texto_paciente_teste == "NAN" or "PACIENTE" in texto_paciente_teste or "NOME" in texto_paciente_teste:
                             continue
                         nome_do_paciente = str(val_paciente).strip()
-                    except Exception as e:
-                        # Se falhar na identificação do paciente, pula para a próxima linha do Excel
+                    except:
                         continue
                     
-                    # Captura individual de cada coluna com travas de segurança para planilhas irregulares
                     try: num_notif = limpar_numero_float(df.iloc[index, 0]) if num_colunas_df > 0 else str(index + 1)
                     except: num_notif = str(index + 1)
                     
@@ -117,47 +187,3 @@ if arquivo_excel:
                         "{{localizacao}}": limpar_nan(onde_val) if onde_val else "Ala B",
                         "{{classificacao_incidente}}": limpar_nan(classif_val) if classif_val else "Incidente com dano moderado",
                         "{{setor_notificante}}": limpar_nan(setor_notif_val) if setor_notif_val else "SALA VERMELHA",
-                        "{{tipo_incidente}}": tipo_incidente, "{{descricao_notificacao}}": texto_descricao,
-                        "{{nome_paciente}}": nome_do_paciente,
-                        "{{leito}}": limpar_numero_float(leito_val) if leito_val else (limpar_numero_float(df.iloc[index, 7]) if num_colunas_df > 7 else ""),
-                        "{{sugestao}}": limpar_nan(texto_sugestao), "{{m}}": marca_manha, "{{t}}": marca_tarde, "{{n}}": marca_noite,
-                        "{{data_envio}}": data_extenso_envio
-                    }
-                    
-                    if os.path.exists(caminho_modelo):
-                        doc_instancia = Document(caminho_modelo)
-                        substituir_texto_protegendo_logos(doc_instancia, dados_memorando)
-                        
-                        buffer_bytes = io.BytesIO()
-                        doc_instancia.save(buffer_bytes)
-                        bytes_word = buffer_bytes.getvalue()
-                        
-                        arquivos_processados.append({
-                            "paciente": nome_do_paciente,
-                            "nome_arquivo": nome_base_arquivo,
-                            "conteudo_word": bytes_word,
-                            "link_email": link_gmail
-                        })
-                    else:
-                        st.error(f"❌ Arquivo de modelo não encontrado no caminho: {caminho_modelo}")
-                        st.stop()
-                
-                # Validação final: avisa se passou pelo loop mas nenhuma linha virou memorando
-                if len(arquivos_processados) == 0:
-                    st.warning("⚠️ Nenhuma linha válida encontrada na planilha. Verifique se os nomes dos pacientes estão localizados estritamente na segunda coluna (Coluna B).")
-                
-                st.session_state[nome_chave_cache] = arquivos_processados
-                
-            except Exception as erro_geral:
-                st.error(f"💥 Ocorreu uma falha crítica no processamento dos dados: {str(erro_geral)}")
-
-    # --- RENDERIZAÇÃO DA INTERFACE ---
-    if nome_chave_cache in st.session_state and len(st.session_state[nome_chave_cache]) > 0:
-        st.success(f"📋 Lista de verificação pronta! {len(st.session_state[nome_chave_cache])} memorandos estruturados.")
-        
-        for idx, item in enumerate(st.session_state[nome_chave_cache]):
-            col_nome, col_word, col_pdf, col_email = st.columns(4)
-            
-            with col_nome:
-                st.markdown(f"🔹 {item['paciente']}")
-                
