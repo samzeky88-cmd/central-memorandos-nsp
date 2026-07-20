@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 import io
 import subprocess
+import time
 from docx import Document
 
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
@@ -39,17 +40,35 @@ def formatar_data_br(valor):
     except:
         return str(valor)
 
-def converter_docx_para_pdf_via_sistema(caminho_docx):
-    """Utiliza o LibreOffice do Linux para gerar um PDF idêntico ao Word."""
+def converter_docx_para_pdf_via_sistema(caminho_docx, index):
+    """Utiliza o LibreOffice de forma isolada e robusta para evitar erros de permissão e concorrência."""
     try:
-        comando = ["soffice", "--headless", "--convert-to", "pdf", caminho_docx]
-        subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        # Define uma pasta de perfil temporária exclusiva para esta conversão não travar no Linux
+        user_profile_dir = f"/tmp/libreoffice_profile_{index}_{int(time.time())}"
         
-        nome_pdf_gerado = caminho_docx.replace(".docx", ".pdf")
+        comando = [
+            "soffice",
+            f"-env:UserInstallation=file://{user_profile_dir}",
+            "--headless",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            "/tmp",
+            caminho_docx
+        ]
+        
+        subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=30)
+        
+        # O LibreOffice joga o PDF convertido na pasta /tmp
+        nome_pdf_gerado = os.path.join("/tmp", os.path.basename(caminho_docx).replace(".docx", ".pdf"))
+        
         if os.path.exists(nome_pdf_gerado):
             with open(nome_pdf_gerado, "rb") as f:
                 dados_pdf = f.read()
             os.remove(nome_pdf_gerado)
+            
+            # Limpa o perfil temporário criado do LibreOffice
+            subprocess.run(["rm", "-rf", user_profile_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return dados_pdf
     except Exception as e:
         pass
@@ -59,7 +78,6 @@ def converter_docx_para_pdf_via_sistema(caminho_docx):
 def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
-    # Busca inteligente dos memorandos nas colunas 01 e 02
     memo_01 = str(linha.get("Nº Memo 01", "")).strip()
     memo_02 = str(linha.get("Nº Memo 02", "")).strip()
     
@@ -70,12 +88,10 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         
     num_notif = str(linha.get(col_notif, "S-N")).strip()
     
-    # Padronização rigorosa dos nomes dos arquivos
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     num_notif_limpo = num_notif.replace("Nº", "").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif_limpo}_I_NSP"
     
-    # Lógica estruturada para os turnos
     turno_planilha = str(linha.get("turno", "")).strip().upper()
     marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
     marca_tarde = "X" if "TARDE" in turno_planilha else " "
@@ -101,13 +117,12 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         "{{n}}": marca_noite
     }
 
-    col_nome, col_word, col_pdf = st.columns([2, 1, 1])
+    col_nome, col_word, col_pdf = st.columns()
     
     with col_nome:
         st.markdown(f"**🔹 {nome_do_paciente}**")
         
     with col_word:
-        # Cria um container em memória para gerar o Word apenas sob demanda
         doc_word = Document(caminho_modelo)
         substituir_texto_protegendo_logos(doc_word, dados_memorando)
         word_io = io.BytesIO()
@@ -123,16 +138,16 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         )
         
     with col_pdf:
-        # O LibreOffice só é acionado para converter se você clicar neste botão específico
-        if st.button("📕 Gerar PDF", key=f"p_btn_{index}"):
-            with st.spinner("Compilando..."):
+        if st.button("⚡ Gerar PDF", key=f"p_btn_{index}"):
+            with st.spinner("Compilando PDF..."):
                 doc_pdf = Document(caminho_modelo)
                 substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
                 
-                caminho_temp = f"temp_{index}.docx"
+                # Salva o arquivo temporário diretamente na pasta /tmp do Linux
+                caminho_temp = f"/tmp/doc_{index}_{int(time.time())}.docx"
                 doc_pdf.save(caminho_temp)
                 
-                pdf_bytes = converter_docx_para_pdf_via_sistema(caminho_temp)
+                pdf_bytes = converter_docx_para_pdf_via_sistema(caminho_temp, index)
                 
                 if os.path.exists(caminho_temp):
                     os.remove(caminho_temp)
@@ -146,7 +161,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
                         key=f"dl_pdf_{index}"
                     )
                 else:
-                    st.error("Erro na conversão.")
+                    st.error("Erro na conversão. Tente novamente.")
     st.markdown("---")
 
 if arquivo_excel:
@@ -164,7 +179,7 @@ if arquivo_excel:
             coluna_notificacao = col
             
     if not coluna_paciente: 
-        coluna_paciente = df.columns[0]
+        coluna_paciente = df.columns
     if not coluna_notificacao: 
         coluna_notificacao = "Nº"
         
@@ -173,6 +188,5 @@ if arquivo_excel:
     
     st.success(f"📋 Lista de verificação pronta! {len(df)} registros encontrados.")
     
-    # Chama a função de fragmento isolado para cada paciente
     for index, linha in df.iterrows():
         renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, coluna_notificacao)
