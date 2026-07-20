@@ -78,24 +78,28 @@ def obter_data_por_extenso(dt):
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
 def gerar_pdf_hospitalar_real(dados):
-    """Gera um documento PDF real estruturado a partir da biblioteca fpdf2"""
+    """Gera um documento PDF real estruturado a partir da biblioteca fpdf2 de forma segura"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_margins(20, 20, 20)
     
+    # Ativa conversão para evitar erros de acentuação no Linux da nuvem
+    def latin(texto):
+        return str(texto).encode('latin-1', 'replace').decode('latin-1')
+        
     # Cabeçalho Alinhado à Direita
     pdf.set_font("Arial", "", 11)
-    pdf.cell(0, 10, f"Sao Luis, {dados.get('{{data_envio}}')}", ln=True, align="R")
+    pdf.cell(0, 10, latin(f"Sao Luis, {dados.get('{{data_envio}}')}"), ln=True, align="R")
     pdf.ln(10)
     
     # Título do Memorando
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"MEMORANDO NSP No {dados.get('{{numero_memorando}}')}", ln=True, align="C")
+    pdf.cell(0, 10, latin(f"MEMORANDO NSP No {dados.get('{{numero_memorando}}')}"), ln=True, align="C")
     pdf.ln(5)
     
     pdf.set_font("Arial", "", 11)
     texto_intro = "Prezado (a), vimos atraves deste comunicar que recebemos uma notificacao de incidente ocorrida neste setor. Segue abaixo as informacoes encaminhadas ao NSP para analise e providencias:"
-    pdf.multi_cell(0, 6, texto_intro)
+    pdf.multi_cell(0, 6, latin(texto_intro))
     pdf.ln(5)
     
     itens = [
@@ -113,14 +117,13 @@ def gerar_pdf_hospitalar_real(dados):
     ]
     
     for label, valor in itens:
-        if valor.strip():
+        if valor and str(valor).strip():
             pdf.set_font("Arial", "B", 10)
-            pdf.write(6, f"{label}: ")
+            pdf.write(6, latin(f"{label}: "))
             pdf.set_font("Arial", "", 10)
-            pdf.write(6, f"{valor}\n")
+            pdf.write(6, latin(f"{valor}\n"))
             pdf.ln(2)
             
-    # Converte para estrutura binária legível
     return pdf.output()
 
 @st.fragment
@@ -199,7 +202,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         f"Agente Administrativo"
     )
     
-    # 🎯 CORRIGIDO: Link absoluto estruturado de forma explícita para o Chrome aceitar redirecionamento externo
     link_gmail = (
         f"https://google.com?"
         f"view=cm&fs=1&tf=1"
@@ -224,7 +226,3 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
             data=word_io.getvalue(),
             file_name=f"{nome_base_arquivo}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            key=f"w_{index}"
-        )
-        
-    with col_pdf:
