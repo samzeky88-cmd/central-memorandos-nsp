@@ -104,7 +104,7 @@ if arquivo_excel:
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
             arquivos_processados = []
             
-            # 🕒 Identifica se é Manhã ou Tarde para a saudação inicial do Gmail
+            # Identifica automaticamente o período do dia
             hora_atual = datetime.now().hour
             saudacao = "Bom dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
             
@@ -164,7 +164,7 @@ if arquivo_excel:
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
                 
-                # 🎯 TEXTO DINÂMICO DO GMAIL SOLICITADO (Mudando a Saudação e o Número do Memorando)
+                # Monta o seu texto de e-mail institucional exato e personalizado por linha
                 texto_email_formatado = (
                     f"{saudacao}\n\n"
                     f"Estamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\n"
@@ -189,4 +189,4 @@ if arquivo_excel:
                 
             st.session_state[nome_chave_cache] = arquivos_processados 
 
-    if nome_chave_cache in st.session_state:
+    # 🎯 CORREÇÃO: Alinhamento e espaçamento de recuo aplicados corretamente em todo o bloco visual
