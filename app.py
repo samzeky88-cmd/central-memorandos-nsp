@@ -47,12 +47,12 @@ def formatar_data_br(valor):
             return ""
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
-        v_str = str(valor).strip().split(" ")[0]
-        if "-" in v_str:
-            parts = v_str.split("-")
+        v_str = str(valor).strip().split(" ")
+        if "-" in v_str[0]:
+            parts = v_str[0].split("-")
             if len(parts) == 3:
                 return f"{parts[2]}/{parts[1]}/{parts[0]}"
-        return v_str
+        return str(valor).strip()
 
 def limpar_numero_float(valor):
     """Remove o .0 de números inteiros vindos do Excel (ex: 886.0 vira 886)"""
@@ -129,8 +129,13 @@ def gerar_pdf_hospitalar_real(dados, nome_arquivo):
 def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif, col_data_notif, col_data_ocorr, col_turno, col_tipo, col_classif, col_desc, col_leito, col_notificante, col_sugestao, col_localizacao, col_email, data_extenso_envio):
     nome_do_paciente = tratar_str_limpa(linha[col_paciente])
     
+    # Busca resiliente para os números de memorando
     memo_01 = tratar_str_limpa(linha.get("Nº Memo 01", ""))
+    if memo_01 == "":
+        memo_01 = tratar_str_limpa(linha.get("MEMO", ""))
+        
     memo_02 = tratar_str_limpa(linha.get("Nº Memo 02", ""))
+    
     if memo_01 == "":
         num_memo_cru = memo_02 if memo_02 != "" else "S-N"
     else:
@@ -216,11 +221,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
             )
         else:
             st.download_button(
-                label="📕 PDF (Baixar via Word)",
+                label="📕 PDF",
                 data=word_io.getvalue(),
                 file_name=f"{nome_base_arquivo}.pdf",
                 mime="application/pdf",
-                key=f"p_{index}",
-                help="Adicione fpdf2 ao seu arquivo requirements.txt para ativar PDFs nativos no Linux."
-            )
-        
