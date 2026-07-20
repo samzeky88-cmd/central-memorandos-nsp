@@ -79,7 +79,7 @@ if arquivo_excel:
     
     if nome_chave_cache not in st.session_state:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
-            # Lê o Excel sem assumir nenhuma linha como cabeçalho fixo no topo
+            # Lê o Excel sem assumir nenhuma linha como cabeçalho de títulos fixo no topo
             df = pd.read_excel(arquivo_excel, header=None)
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
@@ -94,7 +94,7 @@ if arquivo_excel:
                     val_paciente = df.iloc[index, 1] # Coluna B (Paciente)
                     texto_paciente_teste = str(val_paciente).strip().upper()
                     
-                    # Pula as linhas institucionais e títulos de colunas vazias
+                    # Pula as linhas institucionais vazias ou de títulos
                     if pd.isna(val_paciente) or texto_paciente_teste == "" or texto_paciente_teste == "NAN" or "PACIENTE" in texto_paciente_teste or "NOME" in texto_paciente_teste:
                         continue
                         
@@ -147,7 +147,7 @@ if arquivo_excel:
                 setor_notif_val = ""
                 leito_val = ""
                 
-                # 🎯 FIXADO: Adicionado [1] no shape para contar o número de colunas corretamente
+                # 🎯 FIXADO: Adicionado [1] no shape para contar a largura de colunas perfeitamente
                 for r_busca in range(min(index, 15)):
                     for c_busca in range(df.shape[1]):
                         txt_c = str(df.iloc[r_busca, c_busca]).strip().upper()
@@ -188,7 +188,8 @@ if arquivo_excel:
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
                 
+                # Texto de e-mail institucional exato solicitado por você
                 texto_email_formatado = (
                     f"{saudacao}\n\n"
                     f"Estamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\n"
-                    f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para arquivamento de respostas conforme rotina institutional.\n"
+                    f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para arquivamento de respostas conforme rotina institucional.\n"
