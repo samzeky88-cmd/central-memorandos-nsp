@@ -40,11 +40,6 @@ def formatar_data_br(valor):
             return ""
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
-        v_str = str(valor).strip().split(" ")
-        if "-" in v_str[0]:
-            parts = v_str[0].split("-")
-            if len(parts) == 3:
-                return f"{parts[2]}/{parts[1]}/{parts[0]}"
         return str(valor).strip()
 
 def limpar_numero_float(valor):
@@ -76,62 +71,72 @@ def obter_data_por_extenso(dt):
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
 @st.fragment
-def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif, col_data_notif, col_data_ocorr, col_turno, col_tipo, col_classif, col_desc, col_leito, col_notificante, col_sugestao, col_localizacao, col_email, data_extenso_envio):
-    nome_do_paciente = str(linha[col_paciente]).strip()
+def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
+    # Coleta posicional estrita calibrada pelos 4 prints reais enviados
+    num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
     
-    # Coleta inteligente do número do memorando nas duas colunas possíveis (Memo 01 or Memo 02)
-    memo_01 = str(linha.get("Nº Memo 01", "")).strip()
-    memo_02 = str(linha.get("Nº Memo 02", "")).strip()
-    if memo_01 == "" or memo_01.lower() == "nan":
-        num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" else "S-N"
-    else:
-        num_memo_cru = memo_01
+    # Ignora as linhas de cabeçalhos repetidos da tabela do Excel
+    if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
+        return
+
+    dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else ""
+    dt_notif = formatar_data_br(linha.iloc[3]) if num_colunas > 3 else ""
+    turno_planilha = str(linha.iloc[4]).strip().upper() if num_colunas > 4 else ""
+    onde_ocorreu = tratar_str_limpa(linha.iloc[5]) if num_colunas > 5 else "Ala B"
+    tipo_incidente = tratar_str_limpa(linha.iloc[6]) if num_colunas > 6 else ""
+    classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
+    descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
+    
+    # Mapeamento do segundo bloco de colunas (J, K, L, M, N, O)
+    nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
+    leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
+    setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
+    sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else ""
+    gestor_destinatario = tratar_str_limpa(linha.iloc[13]) if num_colunas > 13 else "GESTOR DE ENFERMAGEM"
+    setor_notificado_final = tratar_str_limpa(linha.iloc[14]) if num_colunas > 14 else onde_ocorreu
+
+    # Mapeamento do terceiro bloco (Memorando na coluna P=índice 15 e E-mail corrigido na coluna V=índice 21)
+    num_memo_cru = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else ""
+    if num_memo_cru == "":
+        num_memo_cru = "S-N"
         
-    # Coleta o número da notificação da coluna correta
-    num_notif = limpar_numero_float(linha.get(col_notif, "S-N"))
-    
-    # Padronização limpa do nome do arquivo final
+    email_destino = tratar_str_limpa(linha.iloc[21]) if num_colunas > 21 else ""
+
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
     
-    # Lógica minuciosa e resiliente para marcação dos turnos com X
-    turno_planilha = str(linha.get(col_turno, "")).strip().upper() if col_turno else ""
-    marca_manha = "X" if "MANH" in turno_planilha or "MANHÃ" in turno_planilha else " "
-    marca_tarde = "X" if "TARD" in turno_planilha or "TARDE" in turno_planilha else " "
-    marca_noite = "X" if "NOIT" in turno_planilha or "NOITE" in turno_planilha else " "
+    marca_manha = "X" if "MANH" in turno_planilha else " "
+    marca_tarde = "X" if "TARD" in turno_planilha else " "
+    marca_noite = "X" if "NOIT" in turno_planilha else " "
     
-    # Coleta resiliente do setor notificante para eliminar o erro do 'nan'
-    setor_notificante_bruto = tratar_str_limpa(linha.get(col_notificante, "")) if col_notificante else ""
     if setor_notificante_bruto == "":
         setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE"
 
-    # Vinculando os dados dinâmicos às tags do seu modelo Word
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
-        "{{gestor}}": str(linha.get("Gestor 01", "")).strip(),
-        "{{setor}}": str(linha.get("SETOR NOTIFICADO", "")).strip(),
+        "{{gestor}}": gestor_destinatario,
+        "{{setor}}": setor_notificado_final,
         "{{notificacao_n}}": num_notif,
-        "{{data_notificacao}}": formatar_data_br(linha.get(col_data_notif, "")) if col_data_notif else "",
-        "{{data_ocorrencia}}": formatar_data_br(linha.get(col_data_ocorr, "")) if col_data_ocorr else "",
-        "{{localizacao}}": str(linha.get(col_localizacao, "")).strip() if col_localizacao else "",
-        "{{tipo_incidente}}": str(linha.get(col_tipo, "")).strip() if col_tipo else "",
-        "{{classificacao_incidente}}": str(linha.get(col_classif, "")).strip() if col_classif else "",
-        "{{descricao_notificacao}}": str(linha.get(col_desc, "")).strip() if col_desc else "",
+        "{{data_notificacao}}": dt_notif,
+        "{{data_ocorrencia}}": dt_ocorr,
+        "{{localizacao}}": onde_ocorreu,
+        "{{tipo_incidente}}": tipo_incidente,
+        "{{classificacao_incidente}}": classificacao_incidente,
+        "{{descricao_notificacao}}": descricao_notificacao,
         "{{nome_paciente}}": nome_do_paciente,
-        "{{leito}}": limpar_numero_float(linha.get(col_leito, "")) if col_leito else "",
+        "{{leito}}": leito_paciente,
         "{{setor_notificante}}": setor_notificante_bruto,
-        "{{sugestao}}": str(linha.get(col_sugestao, "")).strip() if col_sugestao else "",
+        "{{sugestao}}": sugestao_nsp,
         "{{m}}": marca_manha,
         "{{t}}": marca_tarde,
         "{{n}}": marca_noite,
         "{{data_envio}}": data_extenso_envio
     }
     
-    # --- CONFIGURAÇÃO DO TEXTO PADRÃO DO GMAIL ---
+    # --- CONFIGURAÇÃO DO TEXTO INSTITUCIONAL DO GMAIL DO EZEQUIAS ---
     hora_atual = datetime.now().hour
     saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
     
-    email_destino = tratar_str_limpa(linha.get(col_email, "")) if col_email else ""
     assunto_email = f"NSP - Memorando Nº {num_memo_cru} (Notificação Nº {num_notif})"
     
     corpo_email = (
@@ -198,32 +203,28 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
     st.markdown("---")
 
 if arquivo_excel:
-    df = pd.read_excel(arquivo_excel)
+    # Carrega o arquivo sem assumir strings para evitar perda de alinhamento nas colunas da direita
+    df = pd.read_excel(arquivo_excel, header=None)
     
-    # 🎯 CORRIGIDO: Puxa o nome exato da primeira coluna (Coluna A) de forma estrita
-    col_notif_forcada = df.columns[0]
-    df.columns = df.columns.str.strip()
+    # Ignora as linhas iniciais de cabeçalhos de texto se existirem
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0, 1]).upper() or str(df.iloc[0, 0]) == "1"):
+        df = df.iloc[1:]
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1, 1]).upper() or str(df.iloc[1, 0]) == "1"):
+        df = df.iloc[2:]
+        
     data_extenso_envio = obter_data_por_extenso(data_selecionada)
+    num_colunas = len(df.columns)
     
-    col_paciente = None
-    col_data_notif = None
-    col_data_ocorr = None
-    col_turno = None
-    col_tipo = None
-    col_classif = None
-    col_desc = None
-    col_leito = None
-    col_notificante = None
-    col_sugestao = None
-    col_localizacao = None
-    col_email = None
+    # Filtra linhas vazias focando na coluna do ID da Notificação (Índice 0)
+    df = df.dropna(subset=[df.columns[0]])
     
-    for col in df.columns:
-        c_upper = col.upper()
-        if "PACIENTE" in c_upper or "NOME" in c_upper: col_paciente = col
-        elif "DATA" in c_upper and "NOTIF" in c_upper: col_data_notif = col
-        elif "DATA" in c_upper and ("OCORR" in c_upper or "OCOR" in c_upper): col_data_ocorr = col
-        elif "TURNO" in c_upper: col_turno = col
-        elif "TIPO" in c_upper or "INCIDENTE" in c_upper: col_tipo = col
-        elif "CLASSIF" in c_upper: col_classif = col
-        elif "DESC" in c_upper or "RESUMO" in c_upper: col_desc = col
+    # Filtra e remove linhas onde a coluna de Pacientes (Índice 9) esteja totalmente limpa
+    if num_colunas > 9:
+        df = df.dropna(subset=[df.columns[9]])
+        df = df[df[df.columns[9]].astype(str).str.strip() != ""]
+    
+    st.success(f"📋 Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
+    
+    for index, linha in df.iterrows():
+        renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio)
+else:
