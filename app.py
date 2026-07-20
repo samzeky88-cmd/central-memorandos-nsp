@@ -77,13 +77,12 @@ if arquivo_excel:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
             df = pd.read_excel(arquivo_excel)
             
-            # 🔍 PROCURA PRECISA DAS COLUNAS EXATAS DA PLANILHA
+            # Varredura das colunas exatas da planilha
             mapa_colunas = {}
             for col in df.columns:
                 col_limpa = str(col).strip()
                 c_upper = col_limpa.upper()
                 
-                # Casamento perfeito baseado na sua imagem real da planilha
                 if col_limpa == "Nº": 
                     mapa_colunas["NOTIF"] = col
                 elif col_limpa == "Nº Memo 01":
@@ -107,7 +106,7 @@ if arquivo_excel:
                 elif "SUGEST" in c_upper or "SUGESTAO" in c_upper: 
                     mapa_colunas["SUGESTAO"] = col
 
-            # 🛠️ SISTEMA DE SEGURANÇA SECUNDÁRIO (Caso o Excel mude algo invisível nos nomes fixos)
+            # Sistema de segurança secundário para os nomes dos Memorandos
             if "MEMO01" not in mapa_colunas:
                 for col in df.columns:
                     if "MEMO" in str(col).upper() and ("1" in str(col) or "01" in str(col)):
@@ -117,7 +116,7 @@ if arquivo_excel:
                     if "MEMO" in str(col).upper() and ("2" in str(col) or "02" in str(col)):
                         mapa_colunas["MEMO02"] = col
 
-            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[1] if len(df.columns) > 1 else df.columns[0])
+            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[0] if len(df.columns) > 0 else "PACIENTE")
             df = df.dropna(subset=[coluna_paciente])
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
@@ -128,7 +127,6 @@ if arquivo_excel:
                 if nome_do_paciente.lower() == "nan" or nome_do_paciente == "":
                     continue
                 
-                # Coleta amarrada e fundida das colunas de memorando
                 memo_01 = str(line.get(mapa_colunas.get("MEMO01", ""), "")).strip()
                 memo_02 = str(line.get(mapa_colunas.get("MEMO02", ""), "")).strip()
                 
@@ -141,8 +139,6 @@ if arquivo_excel:
                 if num_notif == "": 
                     num_notif = str(index + 1)
                 
-                # Substitui barras e espaços para gerar o nome do arquivo limpo sem quebrar caminhos do Windows
-                # Transforma "Nº 1192 / 2026" em "1192 - 2026"
                 num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
                 nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
                 
@@ -200,3 +196,12 @@ if arquivo_excel:
                     label="📝 Baixar WORD",
                     data=item["conteudo"],
                     file_name=f"{item['nome_arquivo']}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"word_btn_{idx}"
+                )
+                
+            with col_pdf:
+                st.download_button(
+                    label="📕 Baixar PDF",
+                    data=item["conteudo"],
+                    file_name=f"{item['nome_arquivo']}.pdf",
