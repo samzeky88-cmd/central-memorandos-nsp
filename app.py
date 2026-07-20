@@ -12,12 +12,6 @@ st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 st.markdown("### 🗓️ Configuração da Data de Envio")
 data_selecionada = st.date_input("Selecione a data que sairá no cabeçalho do Memorando:", datetime.now())
 
-st.markdown("### ✉️ Configuração da Mensagem do E-mail")
-texto_email_padrao = st.text_area(
-    "Edite o corpo do e-mail que será enviado aos gestores:",
-    "Prezado(a) Gestor(a),\n\nSegue em anexo o Memorando referente à notificação de incidente identificada pelo Núcleo de Segurança do Paciente (NSP).\n\nSolicitamos a verificação e o plano de ação no prazo institucional.\n\nAtenciosamente,\nCoordenação do NSP"
-)
-
 arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
 caminho_modelo = "modelo_memorando.docx"
 
@@ -72,7 +66,7 @@ def limpar_numero_float(valor):
             return v_str[:-2]
         return v_str
 
-def obtener_data_por_extenso(dt):
+def obter_data_por_extenso(dt):
     """Gera a data selecionada por extenso em português brasileiro (Ex: 20 de Julho de 2026)"""
     meses = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
@@ -88,28 +82,19 @@ if arquivo_excel:
             df = pd.read_excel(arquivo_excel)
             df_original = df.copy()
             
-            # Varredura das colunas estruturais
             mapa_colunas = {}
             for col in df.columns:
                 col_limpa = str(col).strip()
                 c_upper = col_limpa.upper()
                 
-                if col_limpa == "Nº": 
-                    mapa_colunas["NOTIF"] = col
-                elif "PACIENTE" in c_upper or "NOME" in c_upper: 
-                    mapa_colunas["PACIENTE"] = col
-                elif "DATA" in c_upper and "NOTIF" in c_upper: 
-                    mapa_colunas["DATA_NOTIF"] = col
-                elif "DATA" in c_upper and "OCORR" in c_upper: 
-                    mapa_colunas["DATA_OCORR"] = col
-                elif "TURNO" in c_upper: 
-                    mapa_colunas["TURNO"] = col
-                elif "TIPO" in c_upper: 
-                    mapa_colunas["TIPO"] = col
-                elif "DESC" in c_upper or "RESUMO" in c_upper: 
-                    mapa_colunas["DESC"] = col
-                elif "LEITO" in c_upper: 
-                    mapa_colunas["LEITO"] = col
+                if col_limpa == "Nº": mapa_colunas["NOTIF"] = col
+                elif "PACIENTE" in c_upper or "NOME" in c_upper: mapa_colunas["PACIENTE"] = col
+                elif "DATA" in c_upper and "NOTIF" in c_upper: mapa_colunas["DATA_NOTIF"] = col
+                elif "DATA" in c_upper and "OCORR" in c_upper: mapa_colunas["DATA_OCORR"] = col
+                elif "TURNO" in c_upper: mapa_colunas["TURNO"] = col
+                elif "TIPO" in c_upper: mapa_colunas["TIPO"] = col
+                elif "DESC" in c_upper or "RESUMO" in c_upper: mapa_colunas["DESC"] = col
+                elif "LEITO" in c_upper: mapa_colunas["LEITO"] = col
 
             coluna_paciente = mapa_colunas.get("PACIENTE", df.columns if len(df.columns) > 1 else df.columns)
             df.columns = df.columns.str.strip()
@@ -119,14 +104,14 @@ if arquivo_excel:
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
             arquivos_processados = []
             
+            # 🕒 Identifica se é Manhã ou Tarde para a saudação inicial do Gmail
+            hora_atual = datetime.now().hour
+            saudacao = "Bom dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
+            
             for index, line in df.iterrows():
                 nome_do_paciente = str(line[coluna_paciente]).strip()
                 if nome_do_paciente.lower() == "nan" or nome_do_paciente == "":
                     continue
-                
-                # 🎯 POSICIONAMENTO FÍSICO BLINDADO: Puxa direto das colunas da planilha original (M=12, P=15, T=19)
-                try: texto_sugestao = str(df_original.iloc[index, 12]).strip()
-                except: texto_sugestao = ""
                 
                 try: memo_01 = str(df_original.iloc[index, 15]).strip()
                 except: memo_01 = ""
@@ -149,6 +134,9 @@ if arquivo_excel:
                 marca_tarde = "X" if "TARD" in turno_planilha else " "
                 marca_noite = "X" if "NOIT" in turno_planilha else " "
                 
+                try: texto_sugestao = str(df_original.iloc[index, 12]).strip()
+                except: texto_sugestao = ""
+                
                 dados_memorando = {
                     "{{numero_memorando}}": num_memo_cru,
                     "{{gestor}}": limpar_nan(line.get("Gestor 01", "")),
@@ -163,10 +151,7 @@ if arquivo_excel:
                     "{{descricao_notificacao}}": limpar_nan(line.get(mapa_colunas.get("DESC", ""), "")),
                     "{{nome_paciente}}": nome_do_paciente,
                     "{{leito}}": limpar_numero_float(line.get("leito", "")),
-                    
-                    # Injeta o texto coletado direto da Coluna M física
                     "{{sugestao}}": limpar_nan(texto_sugestao),
-                    
                     "{{m}}": marca_manha,
                     "{{t}}": marca_tarde,
                     "{{n}}": marca_noite,
@@ -179,9 +164,21 @@ if arquivo_excel:
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
                 
+                # 🎯 TEXTO DINÂMICO DO GMAIL SOLICITADO (Mudando a Saudação e o Número do Memorando)
+                texto_email_formatado = (
+                    f"{saudacao}\n\n"
+                    f"Estamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\n"
+                    f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para arquivamento de respostas conforme rotina institucional.\n"
+                    f"Não serão aceitas mensagens via e-mail sem arquivo como resposta.\n\n"
+                    f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP\n\n"
+                    f"Atenciosamente,\n"
+                    f"Ezequias S. Santos\n"
+                    f"Agente Administrativo NAQH"
+                )
+                
                 email_destino = limpar_nan(line.get("Email", ""))
                 assunto_email = f"NSP - Memorando {num_memo_cru} (Notificação {num_notif})"
-                link_gmail = f"https://google.com{email_destino}&su={urllib.parse.quote(assunto_email)}&body={urllib.parse.quote(texto_email_padrao)}"
+                link_gmail = f"https://google.com{email_destino}&su={urllib.parse.quote(assunto_email)}&body={urllib.parse.quote(texto_email_formatado)}"
                 
                 arquivos_processados.append({
                     "paciente": nome_do_paciente,
@@ -193,8 +190,3 @@ if arquivo_excel:
             st.session_state[nome_chave_cache] = arquivos_processados 
 
     if nome_chave_cache in st.session_state:
-        st.success(f"📋 Lista de verificação pronta! {len(st.session_state[nome_chave_cache])} registros processados.")
-        
-        for idx, item in enumerate(st.session_state[nome_chave_cache]):
-            col_nome, col_word, col_pdf, col_email = st.columns(4)
-            
