@@ -167,7 +167,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         
     with col_word:
         doc_word = Document(caminho_modelo)
-        substituir_texto_protecting_logos(doc_word, dados_memorando)
+        substituir_texto_protegendo_logos(doc_word, dados_memorando)  # Nome corrigido aqui 📝
         word_io = io.BytesIO()
         doc_word.save(word_io)
         word_io.seek(0)
@@ -181,7 +181,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         
     with col_pdf:
         doc_pdf = Document(caminho_modelo)
-        substituir_texto_protecting_logos(doc_pdf, dados_memorando)
+        substituir_texto_protegendo_logos(doc_pdf, dados_memorando)  # Nome corrigido aqui 📕
         pdf_io = io.BytesIO()
         doc_pdf.save(pdf_io)
         pdf_io.seek(0)
@@ -223,3 +223,5 @@ if arquivo_excel:
     
     for index, linha in df.iterrows():
         renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio)
+else:
+    st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
