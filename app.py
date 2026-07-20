@@ -77,7 +77,7 @@ if arquivo_excel:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
             df = pd.read_excel(arquivo_excel)
             
-            # Varredura das colunas exatas da planilha
+            # Varredura das colunas normais de texto
             mapa_colunas = {}
             for col in df.columns:
                 col_limpa = str(col).strip()
@@ -85,10 +85,6 @@ if arquivo_excel:
                 
                 if col_limpa == "Nº": 
                     mapa_colunas["NOTIF"] = col
-                elif col_limpa == "Nº Memo 01":
-                    mapa_colunas["MEMO01"] = col
-                elif col_limpa == "Nº Memo 02":
-                    mapa_colunas["MEMO02"] = col
                 elif "PACIENTE" in c_upper or "NOME" in c_upper: 
                     mapa_colunas["PACIENTE"] = col
                 elif "DATA" in c_upper and "NOTIF" in c_upper: 
@@ -106,17 +102,7 @@ if arquivo_excel:
                 elif "SUGEST" in c_upper or "SUGESTAO" in c_upper: 
                     mapa_colunas["SUGESTAO"] = col
 
-            # Sistema de segurança secundário para os nomes dos Memorandos
-            if "MEMO01" not in mapa_colunas:
-                for col in df.columns:
-                    if "MEMO" in str(col).upper() and ("1" in str(col) or "01" in str(col)):
-                        mapa_colunas["MEMO01"] = col
-            if "MEMO02" not in mapa_colunas:
-                for col in df.columns:
-                    if "MEMO" in str(col).upper() and ("2" in str(col) or "02" in str(col)):
-                        mapa_colunas["MEMO02"] = col
-
-            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[0] if len(df.columns) > 0 else "PACIENTE")
+            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[1] if len(df.columns) > 1 else df.columns[0])
             df = df.dropna(subset=[coluna_paciente])
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
@@ -127,11 +113,20 @@ if arquivo_excel:
                 if nome_do_paciente.lower() == "nan" or nome_do_paciente == "":
                     continue
                 
-                memo_01 = str(line.get(mapa_colunas.get("MEMO01", ""), "")).strip()
-                memo_02 = str(line.get(mapa_colunas.get("MEMO02", ""), "")).strip()
+                # 🎯 COLETA ESTREITA POR POSIÇÃO FÍSICA DAS COLUNAS (Contando do zero: P=15, T=19)
+                try:
+                    memo_01 = str(df.iloc[index, 15]).strip()
+                except:
+                    memo_01 = ""
+                    
+                try:
+                    memo_02 = str(df.iloc[index, 19]).strip()
+                except:
+                    memo_02 = ""
                 
-                if memo_01 == "" or memo_01.lower() == "nan":
-                    num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" else "S-N"
+                # Unificação inteligente dos valores das duas colunas
+                if memo_01 == "" or memo_01.lower() == "nan" or memo_01.lower() == "none":
+                    num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" and memo_02.lower() != "none" else "S-N"
                 else:
                     num_memo_cru = memo_01
                     
@@ -139,6 +134,7 @@ if arquivo_excel:
                 if num_notif == "": 
                     num_notif = str(index + 1)
                 
+                # Remove espaços, barras e caracteres para gerar o nome do arquivo perfeitamente limpo
                 num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
                 nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
                 
@@ -161,7 +157,7 @@ if arquivo_excel:
                     "{{descricao_notificacao}}": limpar_nan(line.get(mapa_colunas.get("DESC", ""), "")),
                     "{{nome_paciente}}": nome_do_paciente,
                     "{{leito}}": limpar_numero_float(line.get(mapa_colunas.get("LEITO", ""), "")),
-                    "{{sugestao}}": limpar_nan(line.get(mapa_colunas.get("SUGESTAO", ""), "")),
+                    "{{sugestao}}": limpar_nan(line.get("SUGESTAO", "")),
                     "{{m}}": marca_manha,
                     "{{t}}": marca_tarde,
                     "{{n}}": marca_noite,
@@ -205,3 +201,7 @@ if arquivo_excel:
                     label="📕 Baixar PDF",
                     data=item["conteudo"],
                     file_name=f"{item['nome_arquivo']}.pdf",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"pdf_btn_{idx}"
+                )
+            st.markdown("---")
