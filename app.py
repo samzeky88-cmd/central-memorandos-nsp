@@ -79,17 +79,16 @@ if arquivo_excel:
     
     if nome_chave_cache not in st.session_state:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
-            # 🎯 TRUQUE MESTRE: Lê o Excel sem assumir nenhuma linha como cabeçalho fixo (Garante leitura total de ponta a ponta)
+            # Lê o Excel sem assumir nenhuma linha como cabeçalho fixo no topo
             df = pd.read_excel(arquivo_excel, header=None)
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
             arquivos_processados = []
             
-            # Identificação dinâmica da saudação baseado no relógio
+            # Identificação dinâmica da saudação baseado no relógio do sistema
             hora_atual = datetime.now().hour
             saudacao = "Bom dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
             
-            # Varredura inteligente para ignorar linhas de cabeçalho mescladas do hospital no topo
             for index, line in df.iterrows():
                 try:
                     val_paciente = df.iloc[index, 1] # Coluna B (Paciente)
@@ -128,7 +127,7 @@ if arquivo_excel:
                 try: memo_02 = str(df.iloc[index, 19]).strip() # Coluna T (Memo 02)
                 except: memo_02 = ""
                 
-                # Fusão inteligente das colunas de memorando alternadas
+                # Unificação inteligente das colunas alternadas de memorando
                 if memo_01 == "" or memo_01.lower() == "nan" or memo_01.lower() == "none":
                     num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" and memo_02.lower() != "none" else "S-N"
                 else:
@@ -141,7 +140,6 @@ if arquivo_excel:
                 marca_tarde = "X" if "TARD" in turno_planilha else " "
                 marca_noite = "X" if "NOIT" in turno_planilha else " "
                 
-                # Varredura inteligente secundária nas linhas superiores para coletar variáveis nominativas fixas
                 gestor_val = ""
                 setor_val = ""
                 onde_val = ""
@@ -149,7 +147,7 @@ if arquivo_excel:
                 setor_notif_val = ""
                 leito_val = ""
                 
-                # Procura os títulos nas linhas superiores para não perder a correspondência
+                # 🎯 FIXADO: Adicionado [1] no shape para contar o número de colunas corretamente
                 for r_busca in range(min(index, 15)):
                     for c_busca in range(df.shape[1]):
                         txt_c = str(df.iloc[r_busca, c_busca]).strip().upper()
@@ -160,7 +158,6 @@ if arquivo_excel:
                         elif "SETOR NOTIFICANTE" in txt_c: setor_notif_val = str(df.iloc[index, c_busca])
                         elif "LEITO" in txt_c: leito_val = str(df.iloc[index, c_busca])
 
-                # Garante valores padrões caso as linhas de busca falhem na checagem
                 if not gestor_val: gestor_val = "GESTOR DE ENFERMAGEM"
                 if not setor_val: setor_val = "ALA B"
                 
@@ -193,3 +190,5 @@ if arquivo_excel:
                 
                 texto_email_formatado = (
                     f"{saudacao}\n\n"
+                    f"Estamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\n"
+                    f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para arquivamento de respostas conforme rotina institutional.\n"
