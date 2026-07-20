@@ -9,6 +9,10 @@ from docx import Document
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 
+# 📅 SELETOR DINÂMICO DE DATA NA TELA
+st.markdown("### 🗓️ Configuração da Data de Envio")
+data_selecionada = st.date_input("Selecione a data que sairá no cabeçalho do Memorando:", datetime.now())
+
 arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
 caminho_modelo = "modelo_memorando.docx"
 
@@ -60,29 +64,29 @@ def limpar_numero_float(valor):
     except:
         return str(valor).strip()
 
-def obter_data_por_extenso():
-    """Gera a data atual do sistema por extenso em português brasileiro (Ex: 20 de Julho de 2026)"""
+def obter_data_por_extenso(dt):
+    """Gera a data selecionada por extenso em português brasileiro (Ex: 20 de Julho de 2026)"""
     meses = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
-    hoje = datetime.now()
-    return f"{hoje.day} de {meses[hoje.month]} de {hoje.year}"
+    return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
 @st.fragment
-def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colunas):
+def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colunas, df_original, data_extenso_envio):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
-    # 🔍 Coleta garantida varrendo os nomes reais mapeados para os Memorandos 01 e 02
-    memo_01 = ""
-    memo_02 = ""
+    # Captura blindada nas posições físicas das colunas P e T (índices 15 e 19)
+    try:
+        memo_01 = str(df_original.iloc[index, 15]).strip()
+    except:
+        memo_01 = ""
+        
+    try:
+        memo_02 = str(df_original.iloc[index, 19]).strip()
+    except:
+        memo_02 = ""
     
-    if "MEMO01" in mapa_colunas:
-        memo_01 = str(linha.get(mapa_colunas["MEMO01"], "")).strip()
-    if "MEMO02" in mapa_colunas:
-        memo_02 = str(linha.get(mapa_colunas["MEMO02"], "")).strip()
-    
-    # Executa a fusão inteligente das colunas de memorando
     if memo_01 == "" or memo_01.lower() == "nan":
         num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" else "S-N"
     else:
@@ -92,7 +96,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colun
     if num_notif == "":
         num_notif = str(index + 1)
     
-    # Padronização e limpeza estrita para o nome do arquivo final
+    # Padronização e limpeza total do nome do arquivo final
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
     
@@ -100,8 +104,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colun
     marca_manha = "X" if "MANH" in turno_planilha else " "
     marca_tarde = "X" if "TARD" in turno_planilha else " "
     marca_noite = "X" if "NOIT" in turno_planilha else " "
-    
-    data_hoje_extenso = obter_data_por_extenso()
     
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
@@ -121,7 +123,9 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colun
         "{{m}}": marca_manha,
         "{{t}}": marca_tarde,
         "{{n}}": marca_noite,
-        "{{data_envio}}": data_hoje_extenso 
+        
+        # Usa a data configurada dinamicamente pelo seletor da tela
+        "{{data_envio}}": data_extenso_envio 
     }
 
     col_nome, col_word, col_pdf = st.columns(3)
@@ -162,8 +166,8 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colun
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
+    df_original = df.copy()
     
-    # 🔍 Dicionário de Varredura Ampla por substrings puras (Blindado contra símbolos do Excel)
     mapa_colunas = {}
     for col in df.columns:
         c_upper = str(col).strip().upper()
@@ -172,10 +176,6 @@ if arquivo_excel:
             mapa_colunas["NOTIF"] = col
         elif "PACIENTE" in c_upper or "NOME" in c_upper: 
             mapa_colunas["PACIENTE"] = col
-        elif "MEMO" in c_upper and ("1" in c_upper or "01" in c_upper): 
-            mapa_colunas["MEMO01"] = col
-        elif "MEMO" in c_upper and ("2" in c_upper or "02" in c_upper): 
-            mapa_colunas["MEMO02"] = col
         elif "DATA" in c_upper and "NOTIF" in c_upper: 
             mapa_colunas["DATA_NOTIF"] = col
         elif "DATA" in c_upper and "OCORR" in c_upper: 
@@ -193,6 +193,9 @@ if arquivo_excel:
 
     coluna_paciente = mapa_colunas.get("PACIENTE", df.columns)
     df.columns = df.columns.str.strip()
+    
+    # Gera o texto por extenso com base na data do calendário selecionada na tela
+    data_extenso_envio = obter_data_por_extenso(data_selecionada)
         
     df = df.dropna(subset=[coluna_paciente])
     df = df[df[coluna_paciente].astype(str).str.strip() != ""]
@@ -200,4 +203,4 @@ if arquivo_excel:
     st.success(f"📋 Lista de verificação pronta! {len(df)} registros encontrados.")
     
     for index, line in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, line, coluna_paciente, mapa_colunas)
+        renderizar_linha_paciente_sob_demanda(index, line, coluna_paciente, mapa_colunas, df_original, data_extenso_envio)
