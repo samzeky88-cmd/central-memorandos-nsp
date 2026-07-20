@@ -79,7 +79,7 @@ if arquivo_excel:
     
     if nome_chave_cache not in st.session_state:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
-            # Lê o Excel sem assumir nenhuma linha como cabeçalho de títulos fixo no topo
+            # Lê o Excel de forma bruta sem assumir cabeçalhos fixos no topo
             df = pd.read_excel(arquivo_excel, header=None)
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
@@ -94,7 +94,6 @@ if arquivo_excel:
                     val_paciente = df.iloc[index, 1] # Coluna B (Paciente)
                     texto_paciente_teste = str(val_paciente).strip().upper()
                     
-                    # Pula as linhas institucionais vazias ou de títulos
                     if pd.isna(val_paciente) or texto_paciente_teste == "" or texto_paciente_teste == "NAN" or "PACIENTE" in texto_paciente_teste or "NOME" in texto_paciente_teste:
                         continue
                         
@@ -102,32 +101,31 @@ if arquivo_excel:
                 except:
                     continue
                 
-                # Coleta amarrada pelas posições físicas exatas das suas colunas do Excel
-                try: num_notif = limpar_numero_float(df.iloc[index, 0]) # Coluna A (Nº Notificação)
+                # Coleta amarrada pelas posições físicas das colunas do Excel
+                try: num_notif = limpar_numero_float(df.iloc[index, 0]) # Coluna A
                 except: num_notif = str(index + 1)
                 
-                try: dt_notif = formatar_data_br(df.iloc[index, 4]) # Coluna E (Data Notificação)
+                try: dt_notif = formatar_data_br(df.iloc[index, 4]) # Coluna E
                 except: dt_notif = ""
                 
-                try: dt_ocorr = formatar_data_br(df.iloc[index, 5]) # Coluna F (Data Ocorrência)
+                try: dt_ocorr = formatar_data_br(df.iloc[index, 5]) # Coluna F
                 except: dt_ocorr = ""
                 
-                try: turno_planilha = str(df.iloc[index, 6]).strip().upper() # Coluna G (Turno)
+                try: turno_planilha = str(df.iloc[index, 6]).strip().upper() # Coluna G
                 except: turno_planilha = ""
                 
-                try: tipo_incidente = limpar_nan(df.iloc[index, 10]).replace("_", " ") # Coluna K (Tipo)
+                try: tipo_incidente = limpar_nan(df.iloc[index, 10]).replace("_", " ") # Coluna K
                 except: tipo_incidente = ""
                 
-                try: texto_sugestao = str(df.iloc[index, 12]).strip() # Coluna M (Sugestão)
+                try: texto_sugestao = str(df.iloc[index, 12]).strip() # Coluna M
                 except: texto_sugestao = ""
                 
-                try: memo_01 = str(df.iloc[index, 15]).strip() # Coluna P (Memo 01)
+                try: memo_01 = str(df.iloc[index, 15]).strip() # Coluna P
                 except: memo_01 = ""
                 
-                try: memo_02 = str(df.iloc[index, 19]).strip() # Coluna T (Memo 02)
+                try: memo_02 = str(df.iloc[index, 19]).strip() # Coluna T
                 except: memo_02 = ""
                 
-                # Unificação inteligente das colunas alternadas de memorando
                 if memo_01 == "" or memo_01.lower() == "nan" or memo_01.lower() == "none":
                     num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" and memo_02.lower() != "none" else "S-N"
                 else:
@@ -147,9 +145,10 @@ if arquivo_excel:
                 setor_notif_val = ""
                 leito_val = ""
                 
-                # 🎯 CORRIGIDO: Adicionado [1] para mapear a largura de colunas de forma exata
+                # 🎯 CORRIGIDO: df.shape[1] inserido para varrer o número de colunas perfeitamente
+                num_colunas_df = df.shape[1]
                 for r_busca in range(min(index, 15)):
-                    for c_busca in range(df.shape[1]):
+                    for c_busca in range(num_colunas_df):
                         txt_c = str(df.iloc[r_busca, c_busca]).strip().upper()
                         if "GESTOR" in txt_c: gestor_val = str(df.iloc[index, c_busca])
                         elif "SETOR NOTIFICADO" in txt_c: setor_val = str(df.iloc[index, c_busca])
@@ -172,7 +171,7 @@ if arquivo_excel:
                     "{{classificacao_incidente}}": limpar_nan(classif_val) if classif_val else "Incidente com dano moderado", 
                     "{{setor_notificante}}": limpar_nan(setor_notif_val) if setor_notif_val else "SALA VERMELHA", 
                     "{{tipo_incidente}}": tipo_incidente,
-                    "{{descricao_notificacao}}": limpar_nan(df.iloc[index, 11]), # Coluna L (Descrição)
+                    "{{descricao_notificacao}}": limpar_nan(df.iloc[index, 11]), # Coluna L
                     "{{nome_paciente}}": nome_do_paciente,
                     "{{leito}}": limpar_numero_float(leito_val) if leito_val else limpar_numero_float(df.iloc[index, 7]),
                     "{{sugestao}}": limpar_nan(texto_sugestao),
@@ -188,7 +187,7 @@ if arquivo_excel:
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
                 
-                texto_email_formatado = (
-                    f"{saudacao}\n\n"
-                    f"Estamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\n"
-                    f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para arquivamento de respostas conforme rotina institucional.\n"
+                # 🎯 CORRIGIDO: Removido parênteses da atribuição de string para banir o SyntaxError
+                texto_email_formatado = f"{saudacao}\n\nEstamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\nATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para arquivamento de respostas conforme rotina institucional.\nNão serão aceitas mensagens via e-mail sem arquivo como resposta.\n\nSegue abaixo a notificação para análise do incidente em equipe e resposta ao NSP\n\nAtenciosamente,\nEzequias S. Santos\nAgente Administrativo NAQH"
+                
+                email_destino = ""
