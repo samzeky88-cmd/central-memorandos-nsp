@@ -58,7 +58,7 @@ def limpar_numero_float(valor):
             v_str = str(valor).strip()
             if v_str.endswith(".0"):
                 return str(int(float(v_str)))
-            return str(int(float(v_str))) if valor.is_integer() else v_str
+            return str(int(float(v_str)))
         return str(valor).strip()
     except:
         v_str = str(valor).strip()
@@ -79,78 +79,95 @@ if arquivo_excel:
     
     if nome_chave_cache not in st.session_state:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
+            # Lê o Excel sem processar cabeçalhos de forma rígida
             df = pd.read_excel(arquivo_excel)
-            df_original = df.copy()
-            
-            mapa_colunas = {}
-            for col in df.columns:
-                col_limpa = str(col).strip()
-                c_upper = col_limpa.upper()
-                
-                if col_limpa == "Nº": mapa_colunas["NOTIF"] = col
-                elif "PACIENTE" in c_upper or "NOME" in c_upper: mapa_colunas["PACIENTE"] = col
-                elif "DATA" in c_upper and "NOTIF" in c_upper: mapa_colunas["DATA_NOTIF"] = col
-                elif "DATA" in c_upper and "OCORR" in c_upper: mapa_colunas["DATA_OCORR"] = col
-                elif "TURNO" in c_upper: mapa_colunas["TURNO"] = col
-                elif "TIPO" in c_upper: mapa_colunas["TIPO"] = col
-                elif "DESC" in c_upper or "RESUMO" in c_upper: mapa_colunas["DESC"] = col
-                elif "LEITO" in c_upper: mapa_colunas["LEITO"] = col
-
-            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns if len(df.columns) > 1 else df.columns)
-            df.columns = df.columns.str.strip()
-            df = df.dropna(subset=[coluna_paciente])
-            df = df[df[coluna_paciente].astype(str).str.strip() != ""]
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
             arquivos_processados = []
             
-            # Identifica automaticamente o período do dia
+            # Identificação dinâmica da saudação temporal baseada no relógio do sistema
             hora_atual = datetime.now().hour
             saudacao = "Bom dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
             
             for index, line in df.iterrows():
-                nome_do_paciente = str(line[coluna_paciente]).strip()
-                if nome_do_paciente.lower() == "nan" or nome_do_paciente == "":
+                # 🎯 LEITURA GARANTIDA E BLINDADA POR ÍNDICES DE POSIÇÃO FÍSICA DA PLANILHA
+                try:
+                    val_paciente = df.iloc[index, 1] # Coluna B (Paciente)
+                    if pd.isna(val_paciente) or str(val_paciente).strip() == "" or str(val_paciente).strip().lower() == "nan":
+                        continue
+                    nome_do_paciente = str(val_paciente).strip()
+                except:
                     continue
                 
-                try: memo_01 = str(df_original.iloc[index, 15]).strip()
+                # Captura direta dos dados pelas posições das células
+                try: num_notif = limpar_numero_float(df.iloc[index, 0]) # Coluna A (Nº Notificação)
+                except: num_notif = str(index + 1)
+                
+                try: dt_notif = formatar_data_br(df.iloc[index, 4]) # Coluna E (Data Notificação)
+                except: dt_notif = ""
+                
+                try: dt_ocorr = formatar_data_br(df.iloc[index, 5]) # Coluna F (Data Ocorrência)
+                except: dt_ocorr = ""
+                
+                try: turno_planilha = str(df.iloc[index, 6]).strip().upper() # Coluna G (Turno)
+                except: turno_planilha = ""
+                
+                try: tipo_incidente = limpar_nan(df.iloc[index, 10]).replace("_", " ") # Coluna K (Tipo)
+                except: tipo_incidente = ""
+                
+                try: texto_sugestao = str(df.iloc[index, 12]).strip() # Coluna M (Sugestão)
+                except: texto_sugestao = ""
+                
+                try: memo_01 = str(df.iloc[index, 15]).strip() # Coluna P (Memo 01)
                 except: memo_01 = ""
-                try: memo_02 = str(df_original.iloc[index, 19]).strip()
+                
+                try: memo_02 = str(df.iloc[index, 19]).strip() # Coluna T (Memo 02)
                 except: memo_02 = ""
                 
+                # Unificação inteligente das colunas alternadas de memorando
                 if memo_01 == "" or memo_01.lower() == "nan" or memo_01.lower() == "none":
                     num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" and memo_02.lower() != "none" else "S-N"
                 else:
                     num_memo_cru = memo_01
-                    
-                num_notif = limpar_numero_float(line.get(mapa_colunas.get("NOTIF", ""), index + 1))
-                if num_notif == "": num_notif = str(index + 1)
                 
                 num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
                 nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
                 
-                turno_planilha = str(line.get(mapa_colunas.get("TURNO", ""), "")).strip().upper()
                 marca_manha = "X" if "MANH" in turno_planilha else " "
                 marca_tarde = "X" if "TARD" in turno_planilha else " "
                 marca_noite = "X" if "NOIT" in turno_planilha else " "
                 
-                try: texto_sugestao = str(df_original.iloc[index, 12]).strip()
-                except: texto_sugestao = ""
+                # Varredura para encontrar colunas nominativas remanescentes (que não mudam de lugar)
+                gestor_val = ""
+                setor_val = ""
+                onde_val = ""
+                classif_val = ""
+                setor_notif_val = ""
+                leito_val = ""
                 
+                for c_idx, col_name in enumerate(df.columns):
+                    c_up = str(col_name).upper()
+                    if "GESTOR" in c_up: gestor_val = str(line[col_name])
+                    elif "SETOR NOTIFICADO" in c_up: setor_val = str(line[col_name])
+                    elif "ONDE OCORREU" in c_up: onde_val = str(line[col_name])
+                    elif "CLASSIFICA" in c_up: classif_val = str(line[col_name])
+                    elif "SETOR NOTIFICANTE" in c_up: setor_notif_val = str(line[col_name])
+                    elif "LEITO" in c_up: leito_val = str(line[col_name])
+
                 dados_memorando = {
                     "{{numero_memorando}}": num_memo_cru,
-                    "{{gestor}}": limpar_nan(line.get("Gestor 01", "")),
-                    "{{setor}}": limpar_nan(line.get("SETOR NOTIFICADO", "")),
+                    "{{gestor}}": limpar_nan(gestor_val),
+                    "{{setor}}": limpar_nan(setor_val),
                     "{{notificacao_n}}": num_notif,
-                    "{{data_notificacao}}": formatar_data_br(line.get(mapa_colunas.get("DATA_NOTIF", ""), "")),
-                    "{{data_ocorrencia}}": formatar_data_br(line.get(mapa_colunas.get("DATA_OCORR", ""), "")),
-                    "{{localizacao}}": limpar_nan(line.get("ONDE OCORREU INCIDENTE", "")), 
-                    "{{classificacao_incidente}}": limpar_nan(line.get("CLASSIFICAÇÃO DO INCIDENTE", "")), 
-                    "{{setor_notificante}}": limpar_nan(line.get("SETOR NOTIFICANTE", "")), 
-                    "{{tipo_incidente}}": limpar_nan(line.get(mapa_colunas.get("TIPO", ""), "")).replace("_", " "),
-                    "{{descricao_notificacao}}": limpar_nan(line.get(mapa_colunas.get("DESC", ""), "")),
+                    "{{data_notificacao}}": dt_notif,
+                    "{{data_ocorrencia}}": dt_ocorr,
+                    "{{localizacao}}": limpar_nan(onde_val), 
+                    "{{classificacao_incidente}}": limpar_nan(classif_val), 
+                    "{{setor_notificante}}": limpar_nan(setor_notif_val), 
+                    "{{tipo_incidente}}": tipo_incidente,
+                    "{{descricao_notificacao}}": limpar_nan(df.iloc[index, 11]), # Coluna L (Descrição)
                     "{{nome_paciente}}": nome_do_paciente,
-                    "{{leito}}": limpar_numero_float(line.get("leito", "")),
+                    "{{leito}}": limpar_numero_float(leito_val),
                     "{{sugestao}}": limpar_nan(texto_sugestao),
                     "{{m}}": marca_manha,
                     "{{t}}": marca_tarde,
@@ -164,7 +181,7 @@ if arquivo_excel:
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
                 
-                # Monta o seu texto de e-mail institucional exato e personalizado por linha
+                # Corpo de e-mail institucional exato solicitado por você
                 texto_email_formatado = (
                     f"{saudacao}\n\n"
                     f"Estamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\n"
@@ -176,17 +193,8 @@ if arquivo_excel:
                     f"Agente Administrativo NAQH"
                 )
                 
-                email_destino = limpar_nan(line.get("Email", ""))
+                email_destino = ""
+                for col_name in df.columns:
+                    if "EMAIL" in str(col_name).upper(): email_destino = limpar_nan(line[col_name])
+                
                 assunto_email = f"NSP - Memorando {num_memo_cru} (Notificação {num_notif})"
-                link_gmail = f"https://google.com{email_destino}&su={urllib.parse.quote(assunto_email)}&body={urllib.parse.quote(texto_email_formatado)}"
-                
-                arquivos_processados.append({
-                    "paciente": nome_do_paciente,
-                    "nome_arquivo": nome_base_arquivo,
-                    "conteudo": buffer_bytes.getvalue(),
-                    "link_email": link_gmail
-                })
-                
-            st.session_state[nome_chave_cache] = arquivos_processados 
-
-    # 🎯 CORREÇÃO: Alinhamento e espaçamento de recuo aplicados corretamente em todo o bloco visual
