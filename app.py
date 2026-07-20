@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 import io
 import time
+from datetime import datetime
 from docx import Document
 
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
@@ -37,14 +38,7 @@ def formatar_data_br(valor):
             return ""
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
-        v_str = str(valor).strip()
-        if " " in v_str:
-            v_str = v_str.split(" ")[0]
-        if "-" in v_str:
-            partes = v_str.split("-")
-            if len(partes) == 3:
-                return f"{partes[2]}/{partes[1]}/{partes[0]}"
-        return v_str
+        return str(valor).strip()
 
 def limpar_nan(valor):
     """Substitui qualquer valor vazio ou 'nan' por uma linha em branco limpa"""
@@ -70,9 +64,14 @@ def limpar_numero_float(valor):
 def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colunas):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
-    # 🔍 BUSCA AVANÇADA DE MEMORANDO NAS COLUNAS MAPEADAS
-    memo_01 = str(linha.get(mapa_colunas.get("MEMO01", ""), "")).strip()
-    memo_02 = str(linha.get(mapa_colunas.get("MEMO02", ""), "")).strip()
+    # Coleta garantida varrendo os nomes das colunas de memorando
+    memo_01 = ""
+    memo_02 = ""
+    
+    if "MEMO01" in mapa_colunas:
+        memo_01 = str(linha.get(mapa_colunas["MEMO01"], "")).strip()
+    if "MEMO02" in mapa_colunas:
+        memo_02 = str(linha.get(mapa_colunas["MEMO02"], "")).strip()
     
     if memo_01 == "" or memo_01.lower() == "nan":
         num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" else "S-N"
@@ -83,34 +82,37 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colun
     if num_notif == "":
         num_notif = str(index + 1)
     
-    # Padronização rigorosa e limpa do nome do arquivo final
+    # Padronização e limpeza total do nome do arquivo final
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
     
-    # Lógica estável para os turnos
     turno_planilha = str(linha.get(mapa_colunas.get("TURNO", ""), "")).strip().upper()
     marca_manha = "X" if "MANH" in turno_planilha else " "
     marca_tarde = "X" if "TARD" in turno_planilha else " "
     marca_noite = "X" if "NOIT" in turno_planilha else " "
     
+    data_hoje_envio = datetime.now().strftime("%d/%m/%Y")
+    
+    # 🎯 TRAVADO EXATO: Mapeia as colunas Gestor 01 e SETOR NOTIFICADO diretamente sem falhas
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
-        "{{gestor}}": limpar_nan(linha.get(mapa_colunas.get("GESTOR", ""), "")),
-        "{{setor}}": limpar_nan(linha.get(mapa_colunas.get("SETOR_NOTIF", ""), "")),
+        "{{gestor}}": limpar_nan(linha.get("Gestor 01", "")),
+        "{{setor}}": limpar_nan(linha.get("SETOR NOTIFICADO", "")),
         "{{notificacao_n}}": num_notif,
         "{{data_notificacao}}": formatar_data_br(linha.get(mapa_colunas.get("DATA_NOTIF", ""), "")),
         "{{data_ocorrencia}}": formatar_data_br(linha.get(mapa_colunas.get("DATA_OCORR", ""), "")),
-        "{{localizacao}}": limpar_nan(linha.get(mapa_colunas.get("ONDE", ""), "")), 
-        "{{classificacao_incidente}}": limpar_nan(linha.get("CLASSIFICAÇÃO DO INCIDENTE", linha.get("CLASSIFICACAO DO INCIDENTE", ""))), 
+        "{{localizacao}}": limpar_nan(linha.get("ONDE OCORREU INCIDENTE", "")), 
+        "{{classificacao_incidente}}": limpar_nan(linha.get("CLASSIFICAÇÃO DO INCIDENTE", "")), 
         "{{setor_notificante}}": limpar_nan(linha.get("SETOR NOTIFICANTE", "")), 
-        "{{tipo_incidente}}": limpar_nan(linha.get(mapa_colunas.get("TIPO", ""), "")),
+        "{{tipo_incidente}}": limpar_nan(linha.get(mapa_colunas.get("TIPO", ""), "")).replace("_", " "),
         "{{descricao_notificacao}}": limpar_nan(linha.get(mapa_colunas.get("DESC", ""), "")),
         "{{nome_paciente}}": nome_do_paciente,
         "{{leito}}": limpar_numero_float(linha.get(mapa_colunas.get("LEITO", ""), "")),
         "{{sugestao}}": limpar_nan(linha.get(mapa_colunas.get("SUGESTAO", ""), "")),
         "{{m}}": marca_manha,
         "{{t}}": marca_tarde,
-        "{{n}}": marca_noite
+        "{{n}}": marca_noite,
+        "{{data_envio}}": data_hoje_envio 
     }
 
     col_nome, col_word, col_pdf = st.columns(3)
@@ -152,46 +154,40 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, mapa_colun
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     
-    # 🔍 Dicionário de Varredura Ampla para capturar todas as colunas
     mapa_colunas = {}
     for col in df.columns:
-        c_limpa = str(col).strip().upper().replace("Á", "A").replace("ÇÃO", "CAO").replace("Õ", "O").replace("Í", "I").replace("Ç", "C")
+        c_upper = str(col).strip().upper()
         
         if col == "Nº": 
             mapa_colunas["NOTIF"] = col
-        elif "PACIENTE" in c_limpa or "NOME" in c_limpa: 
+        elif "PACIENTE" in c_upper or "NOME" in c_upper: 
             mapa_colunas["PACIENTE"] = col
-        elif "MEMO" in c_limpa and "01" in c_limpa: 
+        elif "MEMO" in c_upper and ("1" in c_upper or "01" in c_upper): 
             mapa_colunas["MEMO01"] = col
-        elif "MEMO" in c_limpa and "02" in c_limpa: 
+        elif "MEMO" in c_upper and ("2" in c_upper or "02" in c_upper): 
             mapa_colunas["MEMO02"] = col
-        elif "GESTOR" in c_limpa: 
-            mapa_colunas["GESTOR"] = col
-        elif "SETOR NOTIFICADO" in c_limpa: 
-            mapa_colunas["SETOR_NOTIF"] = col
-        elif "DATA" in c_limpa and "NOTIF" in c_limpa: 
+        elif "DATA" in c_upper and "NOTIF" in c_upper: 
             mapa_colunas["DATA_NOTIF"] = col
-        elif "DATA" in c_limpa and "OCORR" in c_limpa: 
+        elif "DATA" in c_upper and "OCORR" in c_upper: 
             mapa_colunas["DATA_OCORR"] = col
-        elif "TURNO" in c_limpa: 
+        elif "TURNO" in c_upper: 
             mapa_colunas["TURNO"] = col
-        elif "TIPO" in c_limpa: 
+        elif "TIPO" in c_upper: 
             mapa_colunas["TIPO"] = col
-        elif "DESC" in c_limpa or "RESUMO" in c_limpa: 
+        elif "DESC" in c_upper or "RESUMO" in c_upper: 
             mapa_colunas["DESC"] = col
-        elif "LEITO" in c_limpa: 
+        elif "LEITO" in c_upper: 
             mapa_colunas["LEITO"] = col
-        elif "SUGEST" in c_limpa: 
+        elif "SUGEST" in c_upper: 
             mapa_colunas["SUGESTAO"] = col
-        elif "ONDE" in c_limpa or "OCORREU" in c_limpa: 
-            mapa_colunas["ONDE"] = col
 
-    coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[1])
+    coluna_paciente = mapa_colunas.get("PACIENTE", df.columns)
+    df.columns = df.columns.str.strip()
         
     df = df.dropna(subset=[coluna_paciente])
     df = df[df[coluna_paciente].astype(str).str.strip() != ""]
     
     st.success(f"📋 Lista de verificação pronta! {len(df)} registros encontrados.")
     
-    for index, linha in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, mapa_colunas)
+    for index, line in df.iterrows():
+        renderizar_linha_paciente_sob_demanda(index, line, coluna_paciente, mapa_colunas)
