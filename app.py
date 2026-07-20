@@ -41,15 +41,16 @@ def formatar_data_br(valor):
         return str(valor)
 
 def converter_docx_para_pdf_via_sistema(caminho_docx, index):
-    """Utiliza o LibreOffice de forma isolada e robusta para evitar erros de permissão e concorrência."""
+    """Utiliza o LibreOffice de forma isolada e robusta para evitar erros no Linux do Streamlit."""
     try:
-        # Define uma pasta de perfil temporária exclusiva para esta conversão não travar no Linux
         user_profile_dir = f"/tmp/libreoffice_profile_{index}_{int(time.time())}"
         
         comando = [
             "soffice",
             f"-env:UserInstallation=file://{user_profile_dir}",
             "--headless",
+            "--nofirststartwizard",
+            "--norestore",
             "--convert-to",
             "pdf",
             "--outdir",
@@ -59,7 +60,6 @@ def converter_docx_para_pdf_via_sistema(caminho_docx, index):
         
         subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=30)
         
-        # O LibreOffice joga o PDF convertido na pasta /tmp
         nome_pdf_gerado = os.path.join("/tmp", os.path.basename(caminho_docx).replace(".docx", ".pdf"))
         
         if os.path.exists(nome_pdf_gerado):
@@ -67,7 +67,7 @@ def converter_docx_para_pdf_via_sistema(caminho_docx, index):
                 dados_pdf = f.read()
             os.remove(nome_pdf_gerado)
             
-            # Limpa o perfil temporário criado do LibreOffice
+            # Limpa a pasta de perfil temporária criada
             subprocess.run(["rm", "-rf", user_profile_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return dados_pdf
     except Exception as e:
@@ -78,6 +78,7 @@ def converter_docx_para_pdf_via_sistema(caminho_docx, index):
 def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
+    # Coleta inteligente do número do memorando nas duas colunas possíveis
     memo_01 = str(linha.get("Nº Memo 01", "")).strip()
     memo_02 = str(linha.get("Nº Memo 02", "")).strip()
     
@@ -88,10 +89,12 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         
     num_notif = str(linha.get(col_notif, "S-N")).strip()
     
+    # Padronização do nome do arquivo (ex: MEMORANDO Nº 1192 - 2026_NOTIFICAÇÃO_Nº 886_I_NSP)
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     num_notif_limpo = num_notif.replace("Nº", "").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif_limpo}_I_NSP"
     
+    # Tratamento automático para marcação dos turnos
     turno_planilha = str(linha.get("turno", "")).strip().upper()
     marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
     marca_tarde = "X" if "TARDE" in turno_planilha else " "
@@ -117,7 +120,8 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         "{{n}}": marca_noite
     }
 
-    col_nome, col_word, col_pdf = st.columns()
+    # FIXADO: Especificado explicitamente o número 3 para criar três colunas alinhadas
+    col_nome, col_word, col_pdf = st.columns(3)
     
     with col_nome:
         st.markdown(f"**🔹 {nome_do_paciente}**")
@@ -139,11 +143,10 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         
     with col_pdf:
         if st.button("⚡ Gerar PDF", key=f"p_btn_{index}"):
-            with st.spinner("Compilando PDF..."):
+            with st.spinner("Processando..."):
                 doc_pdf = Document(caminho_modelo)
                 substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
                 
-                # Salva o arquivo temporário diretamente na pasta /tmp do Linux
                 caminho_temp = f"/tmp/doc_{index}_{int(time.time())}.docx"
                 doc_pdf.save(caminho_temp)
                 
@@ -161,7 +164,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
                         key=f"dl_pdf_{index}"
                     )
                 else:
-                    st.error("Erro na conversão. Tente novamente.")
+                    st.error("Erro no LibreOffice. Tente de novo.")
     st.markdown("---")
 
 if arquivo_excel:
@@ -190,3 +193,4 @@ if arquivo_excel:
     
     for index, linha in df.iterrows():
         renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, coluna_notificacao)
+
