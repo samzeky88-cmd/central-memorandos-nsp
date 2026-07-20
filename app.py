@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import streamlit as st
 import io
+import urllib.parse
 from datetime import datetime
 from docx import Document
 
@@ -11,11 +12,17 @@ st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 st.markdown("### 🗓️ Configuração da Data de Envio")
 data_selecionada = st.date_input("Selecione a data que sairá no cabeçalho do Memorando:", datetime.now())
 
+st.markdown("### ✉️ Configuração da Mensagem do E-mail")
+texto_email_padrao = st.text_area(
+    "Edite o corpo do e-mail que será enviado aos gestores:",
+    "Prezado(a) Gestor(a),\n\nSegue em anexo o Memorando referente à notificação de incidente identificada pelo Núcleo de Segurança do Paciente (NSP).\n\nSolicitamos a verificação e o plano de ação no prazo institucional.\n\nAtenciosamente,\nCoordenação do NSP"
+)
+
 arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
 caminho_modelo = "modelo_memorando.docx"
 
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
-    """Substitui o texto alterando apenas os 'runs' para proteger imagens e cabeçalhos."""
+    """Substitui o texto alterando apenas os 'runs' para proteger imagens, rodapés e cabeçalhos."""
     for paragrafo in doc.paragraphs:
         for tag, valor in dicionario_tags.items():
             if tag in paragrafo.text:
@@ -53,16 +60,19 @@ def limpar_numero_float(valor):
     if pd.isna(valor):
         return ""
     try:
-        if isinstance(valor, float) and valor.is_integer():
-            return str(int(valor))
+        if isinstance(float(valor), float):
+            v_str = str(valor).strip()
+            if v_str.endswith(".0"):
+                return str(int(float(v_str)))
+            return str(int(float(v_str))) if valor.is_integer() else v_str
+        return str(valor).strip()
+    except:
         v_str = str(valor).strip()
         if v_str.endswith(".0"):
             return v_str[:-2]
-        return v_str.strip()
-    except:
-        return str(valor).strip()
+        return v_str
 
-def obter_data_por_extenso(dt):
+def obtener_data_por_extenso(dt):
     """Gera a data selecionada por extenso em português brasileiro (Ex: 20 de Julho de 2026)"""
     meses = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
@@ -76,8 +86,9 @@ if arquivo_excel:
     if nome_chave_cache not in st.session_state:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
             df = pd.read_excel(arquivo_excel)
+            df_original = df.copy()
             
-            # Varredura das colunas normais de texto
+            # Varredura das colunas estruturais
             mapa_colunas = {}
             for col in df.columns:
                 col_limpa = str(col).strip()
@@ -99,11 +110,11 @@ if arquivo_excel:
                     mapa_colunas["DESC"] = col
                 elif "LEITO" in c_upper: 
                     mapa_colunas["LEITO"] = col
-                elif "SUGEST" in c_upper or "SUGESTAO" in c_upper: 
-                    mapa_colunas["SUGESTAO"] = col
 
-            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns[1] if len(df.columns) > 1 else df.columns[0])
+            coluna_paciente = mapa_colunas.get("PACIENTE", df.columns if len(df.columns) > 1 else df.columns)
+            df.columns = df.columns.str.strip()
             df = df.dropna(subset=[coluna_paciente])
+            df = df[df[coluna_paciente].astype(str).str.strip() != ""]
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
             arquivos_processados = []
@@ -113,28 +124,23 @@ if arquivo_excel:
                 if nome_do_paciente.lower() == "nan" or nome_do_paciente == "":
                     continue
                 
-                # 🎯 COLETA ESTREITA POR POSIÇÃO FÍSICA DAS COLUNAS (Contando do zero: P=15, T=19)
-                try:
-                    memo_01 = str(df.iloc[index, 15]).strip()
-                except:
-                    memo_01 = ""
-                    
-                try:
-                    memo_02 = str(df.iloc[index, 19]).strip()
-                except:
-                    memo_02 = ""
+                # 🎯 POSICIONAMENTO FÍSICO BLINDADO: Puxa direto das colunas da planilha original (M=12, P=15, T=19)
+                try: texto_sugestao = str(df_original.iloc[index, 12]).strip()
+                except: texto_sugestao = ""
                 
-                # Unificação inteligente dos valores das duas colunas
+                try: memo_01 = str(df_original.iloc[index, 15]).strip()
+                except: memo_01 = ""
+                try: memo_02 = str(df_original.iloc[index, 19]).strip()
+                except: memo_02 = ""
+                
                 if memo_01 == "" or memo_01.lower() == "nan" or memo_01.lower() == "none":
                     num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" and memo_02.lower() != "none" else "S-N"
                 else:
                     num_memo_cru = memo_01
                     
                 num_notif = limpar_numero_float(line.get(mapa_colunas.get("NOTIF", ""), index + 1))
-                if num_notif == "": 
-                    num_notif = str(index + 1)
+                if num_notif == "": num_notif = str(index + 1)
                 
-                # Remove espaços, barras e caracteres para gerar o nome do arquivo perfeitamente limpo
                 num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
                 nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
                 
@@ -156,8 +162,11 @@ if arquivo_excel:
                     "{{tipo_incidente}}": limpar_nan(line.get(mapa_colunas.get("TIPO", ""), "")).replace("_", " "),
                     "{{descricao_notificacao}}": limpar_nan(line.get(mapa_colunas.get("DESC", ""), "")),
                     "{{nome_paciente}}": nome_do_paciente,
-                    "{{leito}}": limpar_numero_float(line.get(mapa_colunas.get("LEITO", ""), "")),
-                    "{{sugestao}}": limpar_nan(line.get("SUGESTAO", "")),
+                    "{{leito}}": limpar_numero_float(line.get("leito", "")),
+                    
+                    # Injeta o texto coletado direto da Coluna M física
+                    "{{sugestao}}": limpar_nan(texto_sugestao),
+                    
                     "{{m}}": marca_manha,
                     "{{t}}": marca_tarde,
                     "{{n}}": marca_noite,
@@ -170,10 +179,15 @@ if arquivo_excel:
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
                 
+                email_destino = limpar_nan(line.get("Email", ""))
+                assunto_email = f"NSP - Memorando {num_memo_cru} (Notificação {num_notif})"
+                link_gmail = f"https://google.com{email_destino}&su={urllib.parse.quote(assunto_email)}&body={urllib.parse.quote(texto_email_padrao)}"
+                
                 arquivos_processados.append({
                     "paciente": nome_do_paciente,
                     "nome_arquivo": nome_base_arquivo,
-                    "conteudo": buffer_bytes.getvalue()
+                    "conteudo": buffer_bytes.getvalue(),
+                    "link_email": link_gmail
                 })
                 
             st.session_state[nome_chave_cache] = arquivos_processados 
@@ -182,26 +196,5 @@ if arquivo_excel:
         st.success(f"📋 Lista de verificação pronta! {len(st.session_state[nome_chave_cache])} registros processados.")
         
         for idx, item in enumerate(st.session_state[nome_chave_cache]):
-            col_nome, col_word, col_pdf = st.columns(3)
+            col_nome, col_word, col_pdf, col_email = st.columns(4)
             
-            with col_nome:
-                st.markdown(f"**🔹 {item['paciente']}**")
-                
-            with col_word:
-                st.download_button(
-                    label="📝 Baixar WORD",
-                    data=item["conteudo"],
-                    file_name=f"{item['nome_arquivo']}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"word_btn_{idx}"
-                )
-                
-            with col_pdf:
-                st.download_button(
-                    label="📕 Baixar PDF",
-                    data=item["conteudo"],
-                    file_name=f"{item['nome_arquivo']}.pdf",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"pdf_btn_{idx}"
-                )
-            st.markdown("---")
