@@ -232,4 +232,3 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
         
     st.markdown("---")
 
-if arquivo_excel:
