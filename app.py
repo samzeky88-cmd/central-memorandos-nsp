@@ -6,13 +6,6 @@ import urllib.parse
 from datetime import datetime
 from docx import Document
 
-# Biblioteca para gerar um arquivo PDF real e válido na nuvem (Linux)
-try:
-    from fpdf import FPDF
-    FPDF_DISPONIVEL = True
-except ImportError:
-    FPDF_DISPONIVEL = False
-
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 
@@ -23,7 +16,7 @@ arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)
 caminho_modelo = "modelo_memorando.docx"
 
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
-    """Substitui o texto alterando os runs para proteger imagens e tabelas do modelo Word."""
+    """Substitui o texto alterando apenas os 'runs' para proteger imagens e cabeçalhos."""
     for paragrafo in doc.paragraphs:
         for tag, valor in dicionario_tags.items():
             if tag in paragrafo.text:
@@ -47,9 +40,9 @@ def formatar_data_br(valor):
             return ""
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
-        v_str = str(valor).strip().split(" ")
-        if len(v_str) > 0 and "-" in v_str[0]:
-            parts = v_str[0].split("-")
+        v_str = str(valor).strip().split(" ")[0]
+        if "-" in v_str:
+            parts = v_str.split("-")
             if len(parts) == 3:
                 return f"{parts[2]}/{parts[1]}/{parts[0]}"
         return str(valor).strip()
@@ -69,7 +62,7 @@ def limpar_numero_float(valor):
         return str(valor)
 
 def tratar_str_limpa(valor):
-    """Evita a exibição da palavra 'nan' ou vazios nos campos de texto"""
+    """Evita que campos vazios ou nulos exibam a palavra 'nan'"""
     if pd.isna(valor) or str(valor).strip().lower() == "nan" or str(valor).strip().lower() == "none":
         return ""
     return str(valor).strip()
@@ -82,107 +75,84 @@ def obter_data_por_extenso(dt):
     }
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
-def gerar_pdf_hospitalar_real(dados, nome_arquivo):
-    """Gera um PDF estruturado em conformidade com o padrão visual do hospital"""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_margins(20, 20, 20)
-    
-    pdf.set_font("Arial", "", 11)
-    data_cabecalho = f"Sao Luis, {dados.get('{{data_envio}}')}"
-    pdf.cell(0, 10, data_cabecalho, ln=True, align="R")
-    pdf.ln(10)
-    
-    pdf.set_font("Arial", "", 11)
-    texto_intro = "Prezado (a), vimos atraves deste comunicar que recebemos uma notificacao de incidente ocorrida neste setor. Segue abaixo as informacoes encaminhadas ao NSP:"
-    pdf.multi_cell(0, 6, texto_intro)
-    pdf.ln(5)
-    
-    itens_memorando = [
-        ("DATA DA OCORRENCIA", dados.get("{{data_ocorrencia}}")),
-        ("DATA DA NOTIFICACAO", dados.get("{{data_notificacao}}")),
-        ("TURNO QUE OCORREU INCIDENTE", f"( {dados.get('{{m}}')} ) MANHA  ( {dados.get('{{t}}')} ) TARDE  ( {dados.get('{{n}}')} ) NOITE"),
-        ("ONDE OCORREU INCIDENTE", dados.get("{{localizacao}}")),
-        ("TIPO DE INCIDENTE", dados.get("{{tipo_incidente}}")),
-        ("CLASSIFICACAO DO INCIDENTE", dados.get("{{classificacao_incidente}}")),
-        ("DESCRICAO DA NOTIFICACAO", dados.get("{{descricao_notificacao}}")),
-        ("PACIENTE", dados.get("{{nome_paciente}}")),
-        ("LEITO", dados.get("{{leito}}")),
-        ("SETOR NOTIFICANTE", dados.get("{{setor_notificante}}")),
-        ("SUGESTAO/RECOMENDACAO", dados.get("{{sugestao}}"))
-    ]
-    
-    for label, valor in itens_memorando:
-        if valor:
-            pdf.set_font("Arial", "B", 10)
-            pdf.write(6, f"• {label}: ")
-            pdf.set_font("Arial", "", 10)
-            pdf.write(6, f"{valor}\n")
-            pdf.ln(2)
-            
-    return pdf.output()
-
 @st.fragment
 def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif, col_data_notif, col_data_ocorr, col_turno, col_tipo, col_classif, col_desc, col_leito, col_notificante, col_sugestao, col_localizacao, col_email, data_extenso_envio):
-    nome_do_paciente = tratar_str_limpa(linha[col_paciente])
+    nome_do_paciente = str(linha[col_paciente]).strip()
     
-    memo_01 = tratar_str_limpa(linha.get("Nº Memo 01", ""))
-    if memo_01 == "":
-        memo_01 = tratar_str_limpa(linha.get("MEMO", ""))
-        
-    memo_02 = tratar_str_limpa(linha.get("Nº Memo 02", ""))
-    if memo_01 == "":
-        num_memo_cru = memo_02 if memo_02 != "" else "S-N"
+    # Coleta inteligente do número do memorando nas duas colunas possíveis (Memo 01 ou Memo 02)
+    memo_01 = str(linha.get("Nº Memo 01", "")).strip()
+    memo_02 = str(linha.get("Nº Memo 02", "")).strip()
+    if memo_01 == "" or memo_01.lower() == "nan":
+        num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" else "S-N"
     else:
         num_memo_cru = memo_01
         
+    # Coleta o número da notificação da coluna correta
     num_notif = limpar_numero_float(linha.get(col_notif, "S-N"))
+    
+    # Padronização limpa do nome do arquivo final
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
     
-    turno_planilha = tratar_str_limpa(linha.get(col_turno, "")).upper() if col_turno else ""
-    marca_manha = "X" if "MANH" in turno_planilha else " "
-    marca_tarde = "X" if "TARD" in turno_planilha else " "
-    marca_noite = "X" if "NOIT" in turno_planilha else " "
+    # Lógica minuciosa e resiliente para marcação dos turnos com X
+    turno_planilha = str(linha.get(col_turno, "")).strip().upper() if col_turno else ""
+    marca_manha = "X" if "MANH" in turno_planilha or "MANHÃ" in turno_planilha else " "
+    marca_tarde = "X" if "TARD" in turno_planilha or "TARDE" in turno_planilha else " "
+    marca_noite = "X" if "NOIT" in turno_planilha or "NOITE" in turno_planilha else " "
     
+    # Coleta resiliente do setor notificante para eliminar o erro do 'nan'
+    setor_notificante_bruto = tratar_str_limpa(linha.get(col_notificante, "")) if col_notificante else ""
+    if setor_notificante_bruto == "":
+        setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE"
+
+    # Vinculando os dados dinâmicos às tags do seu modelo Word
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
-        "{{gestor}}": tratar_str_limpa(linha.get("Gestor 01", "")),
-        "{{setor}}": tratar_str_limpa(linha.get("SETOR NOTIFICADO", "")),
+        "{{gestor}}": str(linha.get("Gestor 01", "")).strip(),
+        "{{setor}}": str(linha.get("SETOR NOTIFICADO", "")).strip(),
         "{{notificacao_n}}": num_notif,
         "{{data_notificacao}}": formatar_data_br(linha.get(col_data_notif, "")) if col_data_notif else "",
         "{{data_ocorrencia}}": formatar_data_br(linha.get(col_data_ocorr, "")) if col_data_ocorr else "",
-        "{{localizacao}}": tratar_str_limpa(linha.get(col_localizacao, "")) if col_localizacao else "Ala B",
-        "{{tipo_incidente}}": tratar_str_limpa(linha.get(col_tipo, "")),
-        "{{classificacao_incidente}}": tratar_str_limpa(linha.get(col_classif, "")),
-        "{{descricao_notificacao}}": tratar_str_limpa(linha.get(col_desc, "")),
+        "{{localizacao}}": str(linha.get(col_localizacao, "")).strip() if col_localizacao else "",
+        "{{tipo_incidente}}": str(linha.get(col_tipo, "")).strip() if col_tipo else "",
+        "{{classificacao_incidente}}": str(linha.get(col_classif, "")).strip() if col_classif else "",
+        "{{descricao_notificacao}}": str(linha.get(col_desc, "")).strip() if col_desc else "",
         "{{nome_paciente}}": nome_do_paciente,
-        "{{leito}}": limpar_numero_float(linha.get(col_leito, "")),
-        "{{setor_notificante}}": tratar_str_limpa(linha.get(col_notificante, "")),
-        "{{sugestao}}": tratar_str_limpa(linha.get(col_sugestao, "")),
+        "{{leito}}": limpar_numero_float(linha.get(col_leito, "")) if col_leito else "",
+        "{{setor_notificante}}": setor_notificante_bruto,
+        "{{sugestao}}": str(linha.get(col_sugestao, "")).strip() if col_sugestao else "",
         "{{m}}": marca_manha,
         "{{t}}": marca_tarde,
         "{{n}}": marca_noite,
         "{{data_envio}}": data_extenso_envio
     }
     
-    if dados_memorando["{{setor_notificante}}"] == "":
-        dados_memorando["{{setor_notificante}}"] = "NSP - NUCLEO DE SEGURANCA DO PACIENTE"
-
-    email_destino = tratar_str_limpa(linha.get(col_email, "")) if col_email else ""
+    # --- CONFIGURAÇÃO EXCLUSIVA DO TEXTO PADRÃO DO GMAIL ---
     hora_atual = datetime.now().hour
-    saudacao = "Bom dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
-    texto_descricao = dados_memorando["{{descricao_notificacao}}"]
+    saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
     
-    texto_email_formatado = f"{saudacao},\n\nSegue em anexo o Memorando {num_memo_cru} referente à Notificação {num_notif}.\n\nPaciente: {nome_do_paciente}\nDescrição do ocorrido: {texto_descricao}"
-    assunto_email = f"NSP - Memorando {num_memo_cru} (Notificação {num_notif})"
+    email_destino = tratar_str_limpa(linha.get(col_email, "")) if col_email else ""
+    assunto_email = f"NSP - Memorando Nº {num_memo_cru} (Notificação Nº {num_notif})"
+    
+    corpo_email = (
+        f"{saudacao},\n\n"
+        f"Segue em Anexo o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido "
+        f"(via e-mail) em até 15 dias após a data presente.\n\n"
+        f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para "
+        f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens "
+        f"via e-mail sem arquivo como resposta.\n\n"
+        f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP.\n\n"
+        f"Atenciosamente,\n"
+        f"Ezequias S. Santos\n"
+        f"Agente Administrativo"
+    )
     
     link_gmail = (
         f"https://google.com?"
         f"view=cm&fs=1&tf=1"
         f"&to={urllib.parse.quote(email_destino)}"
         f"&su={urllib.parse.quote(assunto_email)}"
-        f"&body={urllib.parse.quote(texto_email_formatado)}"
+        f"&body={urllib.parse.quote(corpo_email)}"
     )
 
     col_nome, col_word, col_pdf, col_email_btn = st.columns(4)
@@ -205,30 +175,53 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
         )
         
     with col_pdf:
-        if FPDF_DISPONIVEL:
-            pdf_bytes = gerar_pdf_hospitalar_real(dados_memorando, nome_base_arquivo)
-            st.download_button(
-                label="📕 PDF",
-                data=pdf_bytes,
-                file_name=f"{nome_base_arquivo}.pdf",
-                mime="application/pdf",
-                key=f"p_{index}"
-            )
-        else:
-            st.download_button(
-                label="📕 PDF",
-                data=word_io.getvalue(),
-                file_name=f"{nome_base_arquivo}.pdf",
-                mime="application/pdf",
-                key=f"p_{index}"
-            )
+        doc_pdf = Document(caminho_modelo)
+        substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
+        pdf_io = io.BytesIO()
+        doc_pdf.save(pdf_io)
+        pdf_io.seek(0)
+        st.download_button(
+            label="📕 PDF",
+            data=pdf_io.getvalue(),
+            file_name=f"{nome_base_arquivo}.pdf",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key=f"p_{index}"
+        )
         
     with col_email_btn:
         st.link_button(
-            label="📧 Enviar E-mail",
+            label="📧 E-mail",
             url=link_gmail,
             key=f"e_{index}"
         )
         
     st.markdown("---")
 
+if arquivo_excel:
+    df = pd.read_excel(arquivo_excel)
+    
+    # FIXADO: Puxa o nome exato da primeira coluna (Coluna A) para ser o índice da Notificação
+    col_notif_forcada = df.columns[0]
+    df.columns = df.columns.str.strip()
+    data_extenso_envio = obter_data_por_extenso(data_selecionada)
+    
+    col_paciente = None
+    col_data_notif = None
+    col_data_ocorr = None
+    col_turno = None
+    col_tipo = None
+    col_classif = None
+    col_desc = None
+    col_leito = None
+    col_notificante = None
+    col_sugestao = None
+    col_localizacao = None
+    col_email = None
+    
+    for col in df.columns:
+        c_upper = col.upper()
+        if "PACIENTE" in c_upper or "NOME" in c_upper: col_paciente = col
+        elif "DATA" in c_upper and "NOTIF" in c_upper: col_data_notif = col
+        elif "DATA" in c_upper and ("OCORR" in c_upper or "OCOR" in c_upper): col_data_ocorr = col
+        elif "TURNO" in c_upper: col_turno = col
+        elif "TIPO" in c_upper or "INCIDENTE" in c_upper: col_tipo = col
