@@ -182,7 +182,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         )
         
     with col_email_btn:
-        # 🎯 SOLUÇÃO DA TRAVA DO CHROME: Substituído por botão HTML nativo injetado estilizado
+        # 🎯 CORRIGIDO: Parâmetro corrigido para unsafe_allow_html=True para destravar a tela
         botao_html = f"""
         <a href="{link_gmail}" target="_blank" style="
             text-decoration: none;
@@ -199,19 +199,19 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
             font-weight: 400;
         ">📧 E-mail</a>
         """
-        st.markdown(botao_html, unsafe_transform=True)
+        st.markdown(botao_html, unsafe_allow_html=True)
         
     st.markdown("---")
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel, header=None)
     
-    if len(df) > 1 and ("STATUS" in str(df.iloc[0, 1]).upper() or str(df.iloc[0, 0]) == "1"):
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0, 0]) == "1"):
         df = df.iloc[1:]
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[1, 1]).upper() or str(df.iloc[1, 0]) == "1"):
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1, 0]) == "1"):
         df = df.iloc[2:]
         
-    data_extenso_envio = obter_data_por_extenso(data_selecionada)
+    data_extenso_envio = obtener_data_por_extenso(data_selecionada)
     num_colunas = len(df.columns)
     
     df = df.dropna(subset=[df.columns[0]])
@@ -222,7 +222,7 @@ if arquivo_excel:
     
     st.success(f"📋 Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
     
-    for index, line in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio)
+    for index, linha in df.iterrows():
+        renderizar_linha_paciente_sob_demanda(index, line=linha, num_colunas=num_colunas, data_extenso_envio=data_extenso_envio)
 else:
     st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
