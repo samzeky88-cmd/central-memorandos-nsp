@@ -40,9 +40,8 @@ def formatar_data_br(valor):
         return str(valor)
 
 def converter_docx_para_pdf_via_sistema(caminho_docx):
-    """Utiliza o LibreOffice do Linux para gerar um PDF idêntico ao Word sem corromper imagens."""
+    """Utiliza o LibreOffice do Linux para gerar um PDF idêntico ao Word."""
     try:
-        # Executa a conversão headless silenciosa no Linux do Streamlit
         comando = ["soffice", "--headless", "--convert-to", "pdf", caminho_docx]
         subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         
@@ -50,114 +49,138 @@ def converter_docx_para_pdf_via_sistema(caminho_docx):
         if os.path.exists(nome_pdf_gerado):
             with open(nome_pdf_gerado, "rb") as f:
                 dados_pdf = f.read()
-            os.remove(nome_pdf_gerado)  # Limpa o PDF temporário do servidor
+            os.remove(nome_pdf_gerado)
             return dados_pdf
     except Exception as e:
         pass
     return None
 
 if arquivo_excel:
-    df = pd.read_excel(arquivo_excel)
-    df.columns = df.columns.str.strip()
-    
-    # Identificação automática da coluna de paciente baseada na sua planilha
-    coluna_paciente = None
-    for col in df.columns:
-        if col.upper() == "PACIENTE" or "PACIENTE" in col.upper() or "NOME" in col.upper():
-            coluna_paciente = col
-            break
+    # Evita reprocessar a planilha toda vez que você clica em um botão
+    if "dados_processados" not in st.session_state:
+        with st.spinner("📦 Preparando e gerando arquivos de verificação... Aguarde um instante."):
+            df = pd.read_excel(arquivo_excel)
+            df.columns = df.columns.str.strip()
             
-    if not coluna_paciente:
-        coluna_paciente = df.columns[0]
-        
-    # Limpeza de linhas inválidas ou fantasmas
-    df = df.dropna(subset=[coluna_paciente])
-    df = df[df[coluna_paciente].astype(str).str.strip() != ""]
-    
-    st.success(f"📋 Planilha validada! {len(df)} registros encontrados. Confira e baixe individualmente abaixo:")
-    
-    for index, linha in df.iterrows():
-        nome_do_paciente = str(linha[coluna_paciente]).strip()
-        
-        # Extrai e limpa as variáveis para construir o nome do arquivo padronizado
-        num_memo_cru = str(linha.get("numero_memorando", "S-N")).strip()
-        num_memo = num_memo_cru.replace("NSP", "").replace("Memo", "").replace("MEMO", "").replace("/", "-").strip()
-        num_notif = str(linha.get("notificacao_n", "S-N")).strip()
-        
-        # Nome do arquivo padronizado exatamente igual ao modelo solicitado
-        nome_base_arquivo = f"MEMORANDO Nº {num_memo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
-        
-        # Inicia uma cópia limpa do Word em disco para a conversão
-        doc = Document(caminho_modelo)
-        
-        # Lógica para marcar 'X' ou deixar espaço em branco nos turnos
-        turno_planilha = str(linha.get("turno", "")).strip().upper()
-        marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
-        marca_tarde = "X" if "TARDE" in turno_planilha else " "
-        marca_noite = "X" if "NOITE" in turno_planilha else " "
-        
-        dados_memorando = {
-            "{{numero_memorando}}": num_memo_cru,
-            "{{gestor}}": str(linha.get("Gestor 01", "")),
-            "{{setor}}": str(linha.get("SETOR NOTIFICADO", "")),
-            "{{notificacao_n}}": num_notif,
-            "{{data_notificacao}}": formatar_data_br(linha.get("data_notificacao", "")),
-            "{{data_ocorrencia}}": formatar_data_br(linha.get("data_ocorrencia", "")),
-            "{{localizacao}}": str(linha.get("localizacao", "")),
-            "{{tipo_incidente}}": str(linha.get("tipo_incidente", "")),
-            "{{classificacao_incidente}}": str(linha.get("classificacao_incidente", "")),
-            "{{descricao_notificacao}}": str(linha.get("descricao_notificacao", "")),
-            "{{nome_paciente}}": nome_do_paciente,
-            "{{leito}}": str(linha.get("leito", "")),
-            "{{setor_notificante}}": str(linha.get("setor_notificante", "")),
-            "{{sugestao}}": str(linha.get("sugestao", "")),
-            "{{m}}": marca_manha,
-            "{{t}}": marca_tarde,
-            "{{n}}": marca_noite
-        }
-        
-        # Substituição cirúrgica preservando imagens do cabeçalho
-        substituir_texto_protegendo_logos(doc, dados_memorando)
-        
-        # Salva o arquivo Word temporário para processamento do LibreOffice
-        caminho_docx_temp = f"temp_{index}.docx"
-        doc.save(caminho_docx_temp)
-        
-        # Carrega os bytes do Word criado para o botão correspondente
-        with open(caminho_docx_temp, "rb") as f:
-            word_bytes = f.read()
+            # 🔍 PROCURA AS COLUNAS COM BASE NAS TRÊS IMAGENS ENVIADAS
+            coluna_paciente = None
+            coluna_notificacao = None
             
-        # Converte para PDF nativo de forma paralela e estável
-        pdf_bytes = converter_docx_para_pdf_via_sistema(caminho_docx_temp)
+            for col in df.columns:
+                c_upper = col.upper()
+                if "PACIENTE" in c_upper or "NOME" in c_upper:
+                    coluna_paciente = col
+                elif col == "Nº" or "NOTIF" in c_upper:
+                    coluna_notificacao = col
+            
+            # Garantia caso falte a identificação automática
+            if not coluna_paciente: coluna_paciente = df.columns
+            if not coluna_notificacao: coluna_notificacao = "Nº"
+            
+            df = df.dropna(subset=[coluna_paciente])
+            df = df[df[coluna_paciente].astype(str).str.strip() != ""]
+            
+            lista_final = []
+            
+            for index, Board in df.iterrows():
+                nome_do_paciente = str(Board[coluna_paciente]).strip()
+                
+                # 🔄 ESTRATÉGIA DE BUSCA NAS DUAS COLUNAS (Memo 01 e Memo 02)
+                memo_01 = str(Board.get("Nº Memo 01", "")).strip()
+                memo_02 = str(Board.get("Nº Memo 02", "")).strip()
+                
+                # Se a coluna 01 estiver vazia ou for nan, ele assume o valor da coluna 02
+                if memo_01 == "" or memo_01.lower() == "nan":
+                    num_memo_cru = memo_02 if memo_02 != "" and memo_02.lower() != "nan" else "S-N"
+                else:
+                    num_memo_cru = memo_01
+                
+                num_notif = str(Board.get(coluna_notificacao, "S-N")).strip()
+                
+                # Limpa os textos para gerar o nome do arquivo padronizado
+                num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
+                num_notif_limpo = num_notif.replace("Nº", "").replace(" ", "").strip()
+                
+                nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif_limpo}_I_NSP"
+                
+                doc = Document(caminho_modelo)
+                
+                turno_planilha = str(Board.get("turno", "")).strip().upper()
+                marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
+                marca_tarde = "X" if "TARDE" in turno_planilha else " "
+                marca_noite = "X" if "NOITE" in turno_planilha else " "
+                
+                # Passa o número correto para preencher dentro do documento Word corporativo
+                dados_memorando = {
+                    "{{numero_memorando}}": num_memo_cru,
+                    "{{gestor}}": str(Board.get("Gestor 01", "")),
+                    "{{setor}}": str(Board.get("SETOR NOTIFICADO", "")),
+                    "{{notificacao_n}}": num_notif,
+                    "{{data_notificacao}}": formatar_data_br(Board.get("data_notificacao", "")),
+                    "{{data_ocorrencia}}": formatar_data_br(Board.get("data_ocorrencia", "")),
+                    "{{localizacao}}": str(Board.get("localizacao", "")),
+                    "{{tipo_incidente}}": str(Board.get("tipo_incidente", "")),
+                    "{{classificacao_incidente}}": str(Board.get("classificacao_incidente", "")),
+                    "{{descricao_notificacao}}": str(Board.get("descricao_notificacao", "")),
+                    "{{nome_paciente}}": nome_do_paciente,
+                    "{{leito}}": str(Board.get("leito", "")),
+                    "{{setor_notificante}}": str(Board.get("setor_notificante", "")),
+                    "{{sugestao}}": str(Board.get("sugestao", "")),
+                    "{{m}}": marca_manha,
+                    "{{t}}": marca_tarde,
+                    "{{n}}": marca_noite
+                }
+                
+                substituir_texto_protegendo_logos(doc, dados_memorando)
+                
+                caminho_docx_temp = f"temp_{index}.docx"
+                doc.save(caminho_docx_temp)
+                
+                with open(caminho_docx_temp, "rb") as f:
+                    word_bytes = f.read()
+                    
+                pdf_bytes = converter_docx_para_pdf_via_sistema(caminho_docx_temp)
+                
+                if os.path.exists(caminho_docx_temp):
+                    os.remove(caminho_docx_temp)
+                    
+                lista_final.append({
+                    "paciente": nome_do_paciente,
+                    "nome_arquivo": nome_base_arquivo,
+                    "word": word_bytes,
+                    "pdf": pdf_bytes
+                })
+                
+            st.session_state["dados_processados"] = lista_final
+
+    # Exibe a lista na tela usando o cache fixado
+    if "dados_processados" in st.session_state:
+        st.success(f"📋 Lista prontas! {len(st.session_state['dados_processados'])} registros encontrados.")
         
-        # Deleta o arquivo Word temporário do servidor imediatamente
-        if os.path.exists(caminho_docx_temp):
-            os.remove(caminho_docx_temp)
+        for idx, item in enumerate(st.session_state["dados_processados"]):
+            col_nome, col_word, col_pdf = st.columns()
             
-        # Renderização organizada dos botões lado a lado na interface
-        col_nome, col_word, col_pdf = st.columns([2, 1, 1])
-        
-        with col_nome:
-            st.markdown(f"**🔹 {nome_do_paciente}**")
-            
-        with col_word:
-            st.download_button(
-                label="📝 Baixar WORD",
-                data=word_bytes,
-                file_name=f"{nome_base_arquivo}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key=f"word_{index}"
-            )
-            
-        with col_pdf:
-            if pdf_bytes:
+            with col_nome:
+                st.markdown(f"**🔹 {item['paciente']}**")
+                
+            with col_word:
                 st.download_button(
-                    label="📕 Baixar PDF",
-                    data=pdf_bytes,
-                    file_name=f"{nome_base_arquivo}.pdf",
-                    mime="application/pdf",
-                    key=f"pdf_{index}"
+                    label="📝 Baixar WORD",
+                    data=item["word"],
+                    file_name=f"{item['nome_arquivo']}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"w_btn_{idx}"
                 )
-            else:
-                st.warning("⚠️ Aguardando LibreOffice")
-        st.divider()
+                
+            with col_pdf:
+                if item["pdf"]:
+                    st.download_button(
+                        label="📕 Baixar PDF",
+                        data=item["pdf"],
+                        file_name=f"{item['nome_arquivo']}.pdf",
+                        mime="application/pdf",
+                        key=f"p_btn_{idx}"
+                    )
+                else:
+                    st.error("Falha ao gerar PDF")
+            st.markdown("---")
