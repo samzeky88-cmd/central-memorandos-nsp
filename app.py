@@ -79,18 +79,19 @@ if arquivo_excel:
     
     if nome_chave_cache not in st.session_state:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
-            # Lê o Excel sem assumir nenhuma linha como cabeçalho fixo no topo
+            # Lê o Excel sem assumir nenhuma linha como cabeçalho de títulos fixo no topo
             df = pd.read_excel(arquivo_excel, header=None)
             
-            data_extenso_envio = obter_data_por_extonos = obter_data_por_extenso(data_selecionada)
+            # 🎯 CORRIGIDO: Removido o erro de digitação da chamada da variável de data por extenso
+            data_extenso_envio = obter_data_por_extenso(data_selecionada)
             arquivos_processados = []
             
             # Identificação dinâmica da saudação baseado no relógio do sistema
             hora_atual = datetime.now().hour
             saudacao = "Bom dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
             
-            # 🎯 FIXADO: Extrai o número exato de colunas isolando o índice 1 do shape
-            num_colunas_df = df.shape[1] if len(df.shape) > 1 else df.shape[0]
+            # 🎯 CORRIGIDO: Captura o número de colunas contando o tamanho da lista de colunas diretamente
+            num_colunas_df = len(df.columns)
             
             for index, line in df.iterrows():
                 try:
@@ -148,6 +149,7 @@ if arquivo_excel:
                 setor_notif_val = ""
                 leito_val = ""
                 
+                # Varre as linhas superiores para encontrar correspondências de variáveis
                 if num_colunas_df > 0:
                     for r_busca in range(min(index, 15)):
                         for c_busca in range(num_colunas_df):
@@ -188,6 +190,4 @@ if arquivo_excel:
                 buffer_bytes = io.BytesIO()
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
-                
-                texto_email_formatado = f"{saudacao}\n\nEstamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\nATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para arquivamento de respostas conforme rotina institucional.\nNão serão aceitas mensagens via e-mail sem arquivo como resposta.\n\nSegue abaixo a notificação para análise do incidente em equipe e resposta ao NSP\n\nAtenciosamente,\nEzequias S. Santos\nAgente Administrativo NAQH"
                 
