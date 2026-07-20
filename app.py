@@ -10,11 +10,7 @@ arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)
 caminho_modelo = "modelo_memorando.docx"
 
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
-    """
-    Substitui o texto alterando apenas os 'runs' (fragmentos de texto puro).
-    Isso impede totalmente que o python-docx toque nas imagens ou no cabeçalho.
-    """
-    # 1. Procura nos parágrafos normais do documento
+    """Substitui o texto alterando apenas os 'runs' para proteger imagens e cabeçalhos."""
     for paragrafo in doc.paragraphs:
         for tag, valor in dicionario_tags.items():
             if tag in paragrafo.text:
@@ -22,7 +18,6 @@ def substituir_texto_protegendo_logos(doc, dicionario_tags):
                     if tag in run.text:
                         run.text = run.text.replace(tag, valor)
                         
-    # 2. Procura dentro de tabelas (caso existam no documento)
     for tabela in doc.tables:
         for linha in tabela.rows:
             for celula in linha.cells:
@@ -43,18 +38,34 @@ def formatar_data_br(valor):
         return str(valor)
 
 if arquivo_excel:
-    # Lê a planilha tratando os nomes das colunas sem espaços extras nas pontas
     df = pd.read_excel(arquivo_excel)
+    
+    # Remove espaços invisíveis que possam atrapalhar o nome das colunas
     df.columns = df.columns.str.strip()
     
-    # Remove as linhas sem paciente para evitar criar documentos vazios
-    df = df.dropna(subset=["nome_paciente"])
+    # 🔍 Identificação precisa e segura da coluna do paciente baseado na sua imagem
+    coluna_paciente = None
+    for col in df.columns:
+        if col.upper() == "PACIENTE" or "PACIENTE" in col.upper() or "NOME" in col.upper():
+            coluna_paciente = col
+            break
+            
+    # Se por acaso a planilha vier totalmente desconfigurada, usa a primeira coluna
+    if not coluna_paciente:
+        coluna_paciente = df.columns[0]
+        
+    # Remove linhas onde o nome do paciente esteja vazio ou nulo (evita criar arquivo fantasma)
+    df = df.dropna(subset=[coluna_paciente])
+    df = df[df[coluna_paciente].astype(str).str.strip() != ""]
     
-    st.success(f"📋 Planilha validada com sucesso! {len(df)} memorandos prontos.")
+    st.success(f"📋 Planilha validada com sucesso! {len(df)} memorandos prontos. (Coluna identificada: '{coluna_paciente}')")
     
     if st.button("🚀 Gerar Memorandos"):
         for index, linha in df.iterrows():
             doc = Document(caminho_modelo)
+            
+            # Puxa o nome do paciente de forma segura
+            nome_do_paciente = str(linha[coluna_paciente]).strip()
             
             # Lógica para marcar 'X' ou deixar espaço em branco nos turnos
             turno_planilha = str(linha.get("turno", "")).strip().upper()
@@ -78,35 +89,35 @@ if arquivo_excel:
                 "{{tipo_incidente}}": str(linha.get("tipo_incidente", "")),
                 "{{classificacao_incidente}}": str(linha.get("classificacao_incidente", "")),
                 "{{descricao_notificacao}}": str(linha.get("descricao_notificacao", "")),
-                "{{nome_paciente}}": str(linha.get("nome_paciente", "")),
+                "{{nome_paciente}}": nome_do_paciente,
                 "{{leito}}": str(linha.get("leito", "")),
                 "{{setor_notificante}}": str(linha.get("setor_notificante", "")),
                 "{{sugestao}}": str(linha.get("sugestao", "")),
                 
-                # Tags de marcação dos turnos entre parênteses da imagem
+                # Tags de marcação dos turnos
                 "{{m}}": marca_manha,
                 "{{t}}": marca_tarde,
                 "{{n}}": marca_noite
             }
             
-            # Executa a substituição sem apagar as logos corporativas
+            # Executa a substituição segura sem remover os logotipos do topo
             substituir_texto_protegendo_logos(doc, dados_memorando)
             
-            # Salva o arquivo final de maneira estruturada
+            # Salva o arquivo final
             num_memo = str(linha.get("numero_memorando", f"S-N-{index}")).replace("/", "-")
-            nome_arquivo_final = f"Memo_{num_memo}_{linha['nome_paciente']}.docx"
+            nome_arquivo_final = f"Memo_{num_memo}_{nome_do_paciente}.docx"
             doc.save(nome_arquivo_final)
             
-            # Apresenta o botão de download personalizado na interface
+            # Disponibiliza o botão de download
             with open(nome_arquivo_final, "rb") as f:
                 st.download_button(
-                    label=f"📥 Baixar Memorando - {linha['nome_paciente']}",
+                    label=f"📥 Baixar Memorando - {nome_do_paciente}",
                     data=f,
                     file_name=nome_arquivo_final,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 )
             
-            # Remove o arquivo do servidor local imediatamente após disponibilizar o download
+            # Remove o arquivo temporário do servidor
             if os.path.exists(nome_arquivo_final):
                 os.remove(nome_arquivo_final)
                 
