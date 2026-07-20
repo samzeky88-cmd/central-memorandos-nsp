@@ -1,147 +1,113 @@
 import os
-import smtplib
-from datetime import datetime
-from email.message import EmailMessage
 import pandas as pd
 import streamlit as st
 from docx import Document
 
-st.set_page_config(page_title="NSP - Central de Memorandos", page_icon="🏥", layout="wide")
-st.title("🏥 Central de Notificações e Memorandos - NSP")
-st.write("Hospital da Cidade Dr. Jackson Lago - São Luís")
+st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄")
+st.title("📄 Emissor de Memorandos - Hospital Dr. Jackson Lago")
 
-CAMINHO_MODELO = "modelo_memorando.docx"
-CAMINHO_ROTEIRO = "roteiro_tratativa.docx"
+arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
+caminho_modelo = "modelo_memorando.docx"
 
-def formatar_data_br(valor_data):
-    if pd.isna(valor_data) or str(valor_data).strip() == "":
-        return ""
-    try:
-        dt = pd.to_datetime(valor_data)
-        return dt.strftime("%d/%m/%Y")
-    except:
-        return str(valor_data)
-
-def formatar_data_extenso(valor_data):
-    if pd.isna(valor_data) or str(valor_data).strip() == "":
-        return ""
-    meses = {
-        1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril",
-        5: "maio", 6: "junho", 7: "julho", 8: "agosto",
-        9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
-    }
-    try:
-        dt = pd.to_datetime(valor_data)
-        return f"{dt.day} de {meses[dt.month]} de {dt.year}"
-    except:
-        return str(valor_data)
-
-# Substituição segura mantendo imagens e estilos
-def substituir_seguro(doc, dados_dinamicos, dt_extenso):
-    for p in doc.paragraphs:
-        if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
-            p.text = f"São Luís, {dt_extenso}"
-        else:
-            for tag, valor in dados_dinamicos.items():
-                if tag in p.text:
-                    for run in p.runs:
-                        if tag in run.text:
-                            run.text = run.text.replace(tag, valor)
-                            
+def substituir_texto_protegendo_logos(doc, dicionario_tags):
+    """
+    Substitui o texto alterando apenas os 'runs' (fragmentos de texto puro).
+    Isso impede totalmente que o python-docx toque nas imagens ou no cabeçalho.
+    """
+    # 1. Procura nos parágrafos normais do documento
+    for paragrafo in doc.paragraphs:
+        for tag, valor in dicionario_tags.items():
+            if tag in paragrafo.text:
+                for run in paragrafo.runs:
+                    if tag in run.text:
+                        run.text = run.text.replace(tag, valor)
+                        
+    # 2. Procura dentro de tabelas (caso existam no documento)
     for tabela in doc.tables:
-        for linha_tab in tabela.rows:
-            for celula in linha_tab.cells:
-                for p in celula.paragraphs:
-                    if "{{data_notificacao}}" in p.text and "São Luís" in p.text:
-                        p.text = f"São Luís, {dt_extenso}"
-                    else:
-                        for tag, valor in dados_dinamicos.items():
-                            if tag in p.text:
-                                for run in p.runs:
-                                    if tag in run.text:
-                                        run.text = run.text.replace(tag, valor)
+        for linha in tabela.rows:
+            for celula in linha.cells:
+                for paragrafo in celula.paragraphs:
+                    for tag, valor in dicionario_tags.items():
+                        if tag in paragrafo.text:
+                            for run in paragrafo.runs:
+                                if tag in run.text:
+                                    run.text = run.text.replace(tag, valor)
 
-arquivo_excel = st.file_uploader("1. Faça o upload da sua planilha de notificações (.xlsx)", type=["xlsx"])
+def formatar_data_br(valor):
+    """Garante que as datas sejam exibidas no formato brasileiro DD/MM/AAAA"""
+    try:
+        if pd.isna(valor) or str(valor).strip() == "":
+            return ""
+        return pd.to_datetime(valor).strftime("%d/%m/%Y")
+    except:
+        return str(valor)
 
 if arquivo_excel:
-    if not os.path.exists(CAMINHO_MODELO) or not os.path.exists(CAMINHO_ROTEIRO):
-        st.error("❌ Arquivos de modelo não encontrados no GitHub.")
-    else:
-        df = pd.read_excel(arquivo_excel)
-        df.columns = df.columns.astype(str).str.strip()
-        df = df.dropna(subset=["Nº"])
-        
-        df_pendentes = df[df["STATUS"].astype(str).str.strip().str.upper() == "PENDENTE"] if "STATUS" in df.columns else df
+    # Lê a planilha tratando os nomes das colunas sem espaços extras nas pontas
+    df = pd.read_excel(arquivo_excel)
+    df.columns = df.columns.str.strip()
+    
+    # Remove as linhas sem paciente para evitar criar documentos vazios
+    df = df.dropna(subset=["nome_paciente"])
+    
+    st.success(f"📋 Planilha validada com sucesso! {len(df)} memorandos prontos.")
+    
+    if st.button("🚀 Gerar Memorandos"):
+        for index, linha in df.iterrows():
+            doc = Document(caminho_modelo)
             
-        if len(df_pendentes) == 0:
-            st.success("✨ Nenhum memorando pendente encontrado!")
-        else:
-            st.subheader(f"📋 Painel de Conferência ({len(df_pendentes)} itens)")
-            st.dataframe(df_pendentes[[c for c in ["Nº", "STATUS", "NOME"] if c in df_pendentes.columns]])
+            # Lógica para marcar 'X' ou deixar espaço em branco nos turnos
+            turno_planilha = str(linha.get("turno", "")).strip().upper()
+            marca_manha = "X" if "MANHÃ" in turno_planilha or "MANHA" in turno_planilha else " "
+            marca_tarde = "X" if "TARDE" in turno_planilha else " "
+            marca_noite = "X" if "NOITE" in turno_planilha else " "
             
-            for index, linha in df_pendentes.iterrows():
-                num_notif = str(int(linha.get("Nº", 0)))
-                raw_memo = linha.get("Nº Memo 02", linha.get("Nº MEMO", "0000"))
-                num_memo = str(raw_memo).split('.')[0] if pd.notna(raw_memo) else "0000"
-                memo_formatado = f"{num_memo}/2026" if "/" not in num_memo else num_memo
+            # Formatação segura das datas lidas da planilha
+            dt_notif = formatar_data_br(linha.get("data_notificacao", ""))
+            dt_ocorr = formatar_data_br(linha.get("data_ocorrencia", ""))
+            
+            # Dicionário mapeando com precisão absoluta as tags da sua imagem
+            dados_memorando = {
+                "{{numero_memorando}}": str(linha.get("numero_memorando", "")),
+                "{{gestor}}": str(linha.get("Gestor 01", "")),
+                "{{setor}}": str(linha.get("SETOR NOTIFICADO", "")),
+                "{{notificacao_n}}": str(linha.get("notificacao_n", "")),
+                "{{data_notificacao}}": dt_notif,
+                "{{data_ocorrencia}}": dt_ocorr,
+                "{{localizacao}}": str(linha.get("localizacao", "")),
+                "{{tipo_incidente}}": str(linha.get("tipo_incidente", "")),
+                "{{classificacao_incidente}}": str(linha.get("classificacao_incidente", "")),
+                "{{descricao_notificacao}}": str(linha.get("descricao_notificacao", "")),
+                "{{nome_paciente}}": str(linha.get("nome_paciente", "")),
+                "{{leito}}": str(linha.get("leito", "")),
+                "{{setor_notificante}}": str(linha.get("setor_notificante", "")),
+                "{{sugestao}}": str(linha.get("sugestao", "")),
                 
-                paciente = str(linha.get("NOME", "Paciente"))
-                setor_destino = str(linha.get("GESTOR DE QUEM VAI RECEBER O GMAIL", linha.get("SETOR NOTIFICADO 02", "")))
-                email_destino = str(linha.get("EMAIL_SETOR", "")).strip()
+                # Tags de marcação dos turnos entre parênteses da imagem
+                "{{m}}": marca_manha,
+                "{{t}}": marca_tarde,
+                "{{n}}": marca_noite
+            }
+            
+            # Executa a substituição sem apagar as logos corporativas
+            substituir_texto_protegendo_logos(doc, dados_memorando)
+            
+            # Salva o arquivo final de maneira estruturada
+            num_memo = str(linha.get("numero_memorando", f"S-N-{index}")).replace("/", "-")
+            nome_arquivo_final = f"Memo_{num_memo}_{linha['nome_paciente']}.docx"
+            doc.save(nome_arquivo_final)
+            
+            # Apresenta o botão de download personalizado na interface
+            with open(nome_arquivo_final, "rb") as f:
+                st.download_button(
+                    label=f"📥 Baixar Memorando - {linha['nome_paciente']}",
+                    data=f,
+                    file_name=nome_arquivo_final,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+            
+            # Remove o arquivo do servidor local imediatamente após disponibilizar o download
+            if os.path.exists(nome_arquivo_final):
+                os.remove(nome_arquivo_final)
                 
-                dt_ocorrencia_br = formatar_data_br(linha.get("DATA DA OCORRÊNCIA", ""))
-                dt_notificacao_br = formatar_data_br(linha.get("DATA DA NOTIFICAÇÃO", ""))
-                dt_extenso_br = formatar_data_extenso(linha.get("DATA DA NOTIFICAÇÃO", datetime.now()))
-                
-                st.markdown(f"### 📄 Notificação Nº {num_notif}")
-                
-                doc = Document(CAMINHO_MODELO)
-                
-                dados_dinamicos = {
-                    "{{numero_memorando}}": memo_formatado,
-                    "{{notificacao_n}}": num_notif,
-                    "{{data_ocorrencia}}": dt_ocorrencia_br,
-                    "{{data_notificacao}}": dt_notificacao_br,
-                    "{{localizacao}}": str(linha.get("ONDE OCORREU INCIDENTE", linha.get("LOCALIZAÇÃO", ""))),
-                    "{{tipo_incidente}}": str(linha.get("TIPO DE INCIDENTE", "")),
-                    "{{classificacao_incidente}}": str(linha.get("CLASSIFICAÇÃO DO INCIDENTE", "")),
-                    "{{descricao_notificacao}}": str(linha.get("DESCRIÇÃO DA NOTIFICAÇÃO", "")),
-                    "{{setor_notificante}}": str(linha.get("SETOR NOTIFICANTE", "")),
-                    "{{setor_destino}}": setor_destino,
-                    "{{nome_paciente}}": paciente,
-                    "{{leito}}": str(linha.get("LEITO", "")),
-                    "{{sugestao}}": str(linha.get("SUGESTÃO", ""))
-                }
-                
-                # Marcação de turnos precisa do espaço idêntico ao modelo do seu Word
-                turno = str(linha.get("TURNO", "")).strip().upper()
-                dados_dinamicos["{{m}}"] = "X" if "MANH" in turno else " "
-                dados_dinamicos["{{t}}"] = "X" if "TARD" in turno else " "
-                dados_dinamicos["{{n}}"] = "X" if "NOIT" in turno else " "
-                
-                substituir_seguro(doc, dados_dinamicos, dt_extenso_br)
-                                        
-                nome_word = f"MEMORANDO_Nº_{num_memo}_NOTIFICAÇÃO_Nº_{num_notif}_I_NSP.docx"
-                doc.save(nome_word)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button(label="📥 Baixar em Word", data=open(nome_word, "rb").read(), file_name=nome_word, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key=f"d_{index}")
-                with col2:
-                    if st.button("🚀 Enviar E-mail", key=f"b_{index}"):
-                        msg = EmailMessage()
-                        msg["Subject"] = f"MEMORANDO Nº {num_memo} - NOTIFICAÇÃO Nº {num_notif} _I_NSP"
-                        msg["From"] = st.secrets["EMAIL_USER"]
-                        msg["To"] = email_destino
-                        msg.set_content(f"Prezados,\n\nSeguem em anexo os documentos do Memorando Nº {memo_formatado}.\n\nAtenciosamente,\nNSP.")
-                        msg.add_attachment(open(nome_word, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename=nome_word)
-                        msg.add_attachment(open(CAMINHO_ROTEIRO, "rb").read(), maintype="application", subtype="vnd.openxmlformats-officedocument.wordprocessingml.document", filename="Roteiro_Para_Tratativa_NSP.docx")
-                        
-                        with smtplib.SMTP_SSL("://gmail.com", 465) as smtp:
-                            smtp.login(st.secrets["EMAIL_USER"], st.secrets["EMAIL_PASSWORD"])
-                            smtp.send_message(msg)
-                        st.success("✅ Enviado com sucesso!")
-                        
-                if os.path.exists(nome_word):
-                    os.remove(nome_word)
-                st.markdown("---")
+        st.balloons()
