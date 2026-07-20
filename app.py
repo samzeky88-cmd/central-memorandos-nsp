@@ -38,18 +38,17 @@ def formatar_data_br(valor):
             return ""
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
-        # Se já for string ou formato texto, limpa possíveis horas residuais
-        v_str = str(valor).split(" ")[0]
+        v_str = str(valor).strip().split(" ")[0]
         if "-" in v_str:
             parts = v_str.split("-")
-            if len(parts) == 3 and len(parts[0]) == 4:
+            if len(parts) == 3:
                 return f"{parts[2]}/{parts[1]}/{parts[0]}"
         return v_str
 
 def limpar_numero_float(valor):
     """Remove o .0 de números inteiros vindos do Excel (ex: 886.0 vira 886)"""
     if pd.isna(valor):
-        return "S-N"
+        return ""
     try:
         if isinstance(valor, float) and valor.is_integer():
             return str(int(valor))
@@ -112,13 +111,13 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
     
-    # Lógica minuciosa e resiliente para marcação dos turnos com X
+    # Lógica para marcação dos turnos com X
     turno_planilha = str(linha.get(col_turno, "")).strip().upper() if col_turno else ""
     marca_manha = "X" if "MANH" in turno_planilha or "MANHÃ" in turno_planilha else " "
     marca_tarde = "X" if "TARD" in turno_planilha or "TARDE" in turno_planilha else " "
     marca_noite = "X" if "NOIT" in turno_planilha or "NOITE" in turno_planilha else " "
     
-    # Montagem do dicionário vinculando os dados dinâmicos às tags do seu modelo Word
+    # Vinculando os dados dinâmicos às tags do seu modelo Word
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
         "{{gestor}}": str(linha.get("Gestor 01", "")).strip(),
@@ -188,7 +187,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     
-    # 🎯 MAPEAMENTO INTELIGENTE DAS VARIÁVEIS BASEADO NOS TÍTULOS DA PLANILHA
     # Captura a primeira coluna (A) nativa para assegurar o número da Notificação
     col_notif_forcada = df.columns[0]
     
@@ -229,3 +227,7 @@ if arquivo_excel:
     
     for index, linha in df.iterrows():
         renderizar_linha_paciente_sob_demanda(
+            index, linha, col_paciente, col_notif_forcada, col_data_notif, 
+            col_data_ocorr, col_turno, col_tipo, col_classif, col_desc, 
+            col_leito, col_notificante, col_sugestao, col_localizacao
+        )
