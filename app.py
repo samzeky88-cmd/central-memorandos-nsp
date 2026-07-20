@@ -79,7 +79,7 @@ if arquivo_excel:
     
     if nome_chave_cache not in st.session_state:
         with st.spinner("📦 Processando e estruturando os memorandos na memória... Aguarde um instante."):
-            # Lê o Excel de forma bruta sem assumir cabeçalhos fixos no topo
+            # Lê o Excel sem assumir nenhuma linha como cabeçalho fixo no topo
             df = pd.read_excel(arquivo_excel, header=None)
             
             data_extenso_envio = obter_data_por_extenso(data_selecionada)
@@ -88,6 +88,9 @@ if arquivo_excel:
             # Identificação dinâmica da saudação baseado no relógio do sistema
             hora_atual = datetime.now().hour
             saudacao = "Bom dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
+            
+            # 🎯 CORRIGIDO: Captura o número total de colunas para os loops de varredura
+            num_colunas_df = df.shape[1] if len(df.shape) > 1 else 0
             
             for index, line in df.iterrows():
                 try:
@@ -101,7 +104,7 @@ if arquivo_excel:
                 except:
                     continue
                 
-                # Coleta amarrada pelas posições físicas das colunas do Excel
+                # Coleta amarrada pelas posições físicas exatas das suas colunas do Excel
                 try: num_notif = limpar_numero_float(df.iloc[index, 0]) # Coluna A
                 except: num_notif = str(index + 1)
                 
@@ -145,17 +148,16 @@ if arquivo_excel:
                 setor_notif_val = ""
                 leito_val = ""
                 
-                # 🎯 CORRIGIDO: df.shape[1] inserido para varrer o número de colunas perfeitamente
-                num_colunas_df = df.shape[1]
-                for r_busca in range(min(index, 15)):
-                    for c_busca in range(num_colunas_df):
-                        txt_c = str(df.iloc[r_busca, c_busca]).strip().upper()
-                        if "GESTOR" in txt_c: gestor_val = str(df.iloc[index, c_busca])
-                        elif "SETOR NOTIFICADO" in txt_c: setor_val = str(df.iloc[index, c_busca])
-                        elif "ONDE OCORREU" in txt_c: onde_val = str(df.iloc[index, c_busca])
-                        elif "CLASSIFICA" in txt_c: classif_val = str(df.iloc[index, c_busca])
-                        elif "SETOR NOTIFICANTE" in txt_c: setor_notif_val = str(df.iloc[index, c_busca])
-                        elif "LEITO" in txt_c: leito_val = str(df.iloc[index, c_busca])
+                if num_colunas_df > 0:
+                    for r_busca in range(min(index, 15)):
+                        for c_busca in range(num_colunas_df):
+                            txt_c = str(df.iloc[r_busca, c_busca]).strip().upper()
+                            if "GESTOR" in txt_c: gestor_val = str(df.iloc[index, c_busca])
+                            elif "SETOR NOTIFICADO" in txt_c: setor_val = str(df.iloc[index, c_busca])
+                            elif "ONDE OCORREU" in txt_c: onde_val = str(df.iloc[index, c_busca])
+                            elif "CLASSIFICA" in txt_c: classif_val = str(df.iloc[index, c_busca])
+                            elif "SETOR NOTIFICANTE" in txt_c: setor_notif_val = str(df.iloc[index, c_busca])
+                            elif "LEITO" in txt_c: leito_val = str(df.iloc[index, c_busca])
 
                 if not gestor_val: gestor_val = "GESTOR DE ENFERMAGEM"
                 if not setor_val: setor_val = "ALA B"
@@ -187,7 +189,6 @@ if arquivo_excel:
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
                 
-                # 🎯 CORRIGIDO: Removido parênteses da atribuição de string para banir o SyntaxError
                 texto_email_formatado = f"{saudacao}\n\nEstamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\nATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para arquivamento de respostas conforme rotina institucional.\nNão serão aceitas mensagens via e-mail sem arquivo como resposta.\n\nSegue abaixo a notificação para análise do incidente em equipe e resposta ao NSP\n\nAtenciosamente,\nEzequias S. Santos\nAgente Administrativo NAQH"
                 
                 email_destino = ""
