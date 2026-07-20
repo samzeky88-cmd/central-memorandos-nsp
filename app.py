@@ -66,8 +66,6 @@ def converter_docx_para_pdf_via_sistema(caminho_docx, index):
             with open(nome_pdf_gerado, "rb") as f:
                 dados_pdf = f.read()
             os.remove(nome_pdf_gerado)
-            
-            # Limpa a pasta de perfil temporária criada
             subprocess.run(["rm", "-rf", user_profile_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return dados_pdf
     except Exception as e:
@@ -75,7 +73,7 @@ def converter_docx_para_pdf_via_sistema(caminho_docx, index):
     return None
 
 @st.fragment
-def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif):
+def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notificacao_forcada):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
     # Coleta inteligente do número do memorando nas duas colunas possíveis
@@ -87,9 +85,12 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
     else:
         num_memo_cru = memo_01
         
-    num_notif = str(linha.get(col_notif, "S-N")).strip()
+    # 🔥 Força a leitura do número da notificação pela primeira coluna (Coluna A) para evitar o 'nan'
+    num_notif = str(linha[col_notificacao_forcada]).strip()
+    if num_notif.lower() == "nan" or num_notif == "":
+        num_notif = "S-N"
     
-    # Padronização do nome do arquivo (ex: MEMORANDO Nº 1192 - 2026_NOTIFICAÇÃO_Nº 886_I_NSP)
+    # Padronização do nome do arquivo
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     num_notif_limpo = num_notif.replace("Nº", "").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif_limpo}_I_NSP"
@@ -120,7 +121,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
         "{{n}}": marca_noite
     }
 
-    # FIXADO: Especificado explicitamente o número 3 para criar três colunas alinhadas
     col_nome, col_word, col_pdf = st.columns(3)
     
     with col_nome:
@@ -164,27 +164,25 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif)
                         key=f"dl_pdf_{index}"
                     )
                 else:
-                    st.error("Erro no LibreOffice. Tente de novo.")
+                    st.error("Erro temporário no servidor. Clique em 'Gerar PDF' novamente.")
     st.markdown("---")
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
+    
+    # Captura o nome original da primeira coluna (Coluna A) para usar como indexador da Notificação
+    coluna_notificacao_forcada = df.columns[0]
+    
     df.columns = df.columns.str.strip()
     
     coluna_paciente = None
-    coluna_notificacao = None
-    
     for col in df.columns:
         c_upper = col.upper()
         if "PACIENTE" in c_upper or "NOME" in c_upper:
             coluna_paciente = col
-        elif col == "Nº" or "NOTIF" in c_upper:
-            coluna_notificacao = col
             
     if not coluna_paciente: 
-        coluna_paciente = df.columns
-    if not coluna_notificacao: 
-        coluna_notificacao = "Nº"
+        coluna_paciente = df.columns[1] # Assume a segunda coluna caso falhe
         
     df = df.dropna(subset=[coluna_paciente])
     df = df[df[coluna_paciente].astype(str).str.strip() != ""]
@@ -192,5 +190,4 @@ if arquivo_excel:
     st.success(f"📋 Lista de verificação pronta! {len(df)} registros encontrados.")
     
     for index, linha in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, coluna_notificacao)
-
+        renderizar_linha_paciente_sob_demanda(index, linha, coluna_paciente, coluna_notificacao_forcada)
