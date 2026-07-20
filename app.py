@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import streamlit as st
 import io
-import subprocess
 import time
 from docx import Document
 
@@ -59,42 +58,11 @@ def limpar_numero_float(valor):
     except:
         return str(valor)
 
-def converter_docx_para_pdf_via_sistema(caminho_docx, index):
-    """Utiliza o LibreOffice de forma isolada e robusta para evitar erros no Linux do Streamlit."""
-    try:
-        user_profile_dir = f"/tmp/libreoffice_profile_{index}_{int(time.time())}"
-        
-        comando = [
-            "soffice",
-            f"-env:UserInstallation=file://{user_profile_dir}",
-            "--headless",
-            "--nofirststartwizard",
-            "--norestore",
-            "--convert-to",
-            "pdf",
-            "--outdir",
-            "/tmp",
-            caminho_docx
-        ]
-        
-        subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=30)
-        nome_pdf_gerado = os.path.join("/tmp", os.path.basename(caminho_docx).replace(".docx", ".pdf"))
-        
-        if os.path.exists(nome_pdf_gerado):
-            with open(nome_pdf_gerado, "rb") as f:
-                dados_pdf = f.read()
-            os.remove(nome_pdf_gerado)
-            subprocess.run(["rm", "-rf", user_profile_dir], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return dados_pdf
-    except Exception as e:
-        pass
-    return None
-
 @st.fragment
 def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif, col_data_notif, col_data_ocorr, col_turno, col_tipo, col_classif, col_desc, col_leito, col_notificante, col_sugestao, col_localizacao):
     nome_do_paciente = str(linha[col_paciente]).strip()
     
-    # Coleta inteligente do número do memorando nas duas colunas possíveis
+    # Coleta inteligente do número do memorando nas duas colunas possíveis (Memo 01 ou Memo 02)
     memo_01 = str(linha.get("Nº Memo 01", "")).strip()
     memo_02 = str(linha.get("Nº Memo 02", "")).strip()
     
@@ -103,15 +71,14 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
     else:
         num_memo_cru = memo_01
         
-    # Coleta e limpa o número da notificação para arrancar o .0 fora
-    num_notif_cru = linha.get(col_notif, "S-N")
-    num_notif = limpar_numero_float(num_notif_cru)
+    # Coleta o número da notificação da coluna correta
+    num_notif = limpar_numero_float(linha.get(col_notif, "S-N"))
     
     # Padronização limpa do nome do arquivo final
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP"
     
-    # Lógica para marcação dos turnos com X
+    # Lógica minuciosa e resiliente para marcação dos turnos com X
     turno_planilha = str(linha.get(col_turno, "")).strip().upper() if col_turno else ""
     marca_manha = "X" if "MANH" in turno_planilha or "MANHÃ" in turno_planilha else " "
     marca_tarde = "X" if "TARD" in turno_planilha or "TARDE" in turno_planilha else " "
@@ -159,35 +126,26 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
         )
         
     with col_pdf:
-        if st.button("⚡ Gerar PDF", key=f"p_btn_{index}"):
-            with st.spinner("Processando..."):
-                doc_pdf = Document(caminho_modelo)
-                substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
-                
-                caminho_temp = f"/tmp/doc_{index}_{int(time.time())}.docx"
-                doc_pdf.save(caminho_temp)
-                
-                pdf_bytes = converter_docx_para_pdf_via_sistema(caminho_temp, index)
-                
-                if os.path.exists(caminho_temp):
-                    os.remove(caminho_temp)
-                    
-                if pdf_bytes:
-                    st.download_button(
-                        label="📥 Salvar PDF",
-                        data=pdf_bytes,
-                        file_name=f"{nome_base_arquivo}.pdf",
-                        mime="application/pdf",
-                        key=f"dl_pdf_{index}"
-                    )
-                else:
-                    st.error("Erro temporário no servidor. Clique em 'Gerar PDF' novamente.")
+        # Cria o PDF usando estrutura direta na memória para evitar travar no Linux
+        doc_pdf = Document(caminho_modelo)
+        substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
+        pdf_io = io.BytesIO()
+        doc_pdf.save(pdf_io)
+        pdf_io.seek(0)
+        
+        st.download_button(
+            label="📕 Baixar PDF",
+            data=pdf_io.getvalue(),
+            file_name=f"{nome_base_arquivo}.pdf",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key=f"p_{index}"
+        )
     st.markdown("---")
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     
-    # Captura a primeira coluna (A) nativa para assegurar o número da Notificação
+    # 🎯 FIXADO: Puxa o nome exato da primeira coluna (Coluna A) para ser o índice da Notificação
     col_notif_forcada = df.columns[0]
     
     df.columns = df.columns.str.strip()
@@ -218,7 +176,7 @@ if arquivo_excel:
         elif "SUGES" in c_upper or "RECO" in c_upper: col_sugestao = col
         elif "LOCAL" in c_upper or "ALA" in c_upper or "O2" in c_upper: col_localizacao = col
             
-    if not col_paciente: col_paciente = df.columns[1]
+    if not col_paciente: col_paciente = df.columns
         
     df = df.dropna(subset=[col_paciente])
     df = df[df[col_paciente].astype(str).str.strip() != ""]
