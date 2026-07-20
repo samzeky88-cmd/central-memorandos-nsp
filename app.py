@@ -45,7 +45,7 @@ def formatar_data_br(valor):
             parts = v_str.split("-")
             if len(parts) == 3:
                 return f"{parts[2]}/{parts[1]}/{parts[0]}"
-        return str(valor).strip()
+        return v_str
 
 def limpar_numero_float(valor):
     """Remove o .0 de números inteiros vindos do Excel (ex: 886.0 vira 886)"""
@@ -127,7 +127,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
         "{{data_envio}}": data_extenso_envio
     }
     
-    # --- CONFIGURAÇÃO EXCLUSIVA DO TEXTO PADRÃO DO GMAIL ---
+    # --- CONFIGURAÇÃO DO TEXTO PADRÃO DO GMAIL ---
     hora_atual = datetime.now().hour
     saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
     
@@ -136,7 +136,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
     
     corpo_email = (
         f"{saudacao},\n\n"
-        f"Segue em Anexo o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido "
+        f"Segue em Anexo o Memorando Nº {num_memo_cru} para ser analisado e respondido "
         f"(via e-mail) em até 15 dias após a data presente.\n\n"
         f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para "
         f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens "
@@ -200,7 +200,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, col_paciente, col_notif,
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
     
-    # FIXADO: Puxa o nome exato da primeira coluna (Coluna A) para ser o índice da Notificação
+    # RESTAURADO: Coleta estrita do índice zero idêntico ao seu código base funcional
     col_notif_forcada = df.columns[0]
     df.columns = df.columns.str.strip()
     data_extenso_envio = obter_data_por_extenso(data_selecionada)
@@ -225,3 +225,5 @@ if arquivo_excel:
         elif "DATA" in c_upper and ("OCORR" in c_upper or "OCOR" in c_upper): col_data_ocorr = col
         elif "TURNO" in c_upper: col_turno = col
         elif "TIPO" in c_upper or "INCIDENTE" in c_upper: col_tipo = col
+        elif "CLASSIF" in c_upper: col_classif = col
+        elif "DESC" in c_upper or "RESUMO" in c_upper: col_desc = col
