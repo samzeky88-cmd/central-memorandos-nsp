@@ -6,13 +6,6 @@ import urllib.parse
 from datetime import datetime
 from docx import Document
 
-# Biblioteca para gerar o PDF real estruturado na nuvem Linux
-try:
-    from fpdf import FPDF
-    FPDF_DISPONIVEL = True
-except ImportError:
-    FPDF_DISPONIVEL = False
-
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 
@@ -76,55 +69,6 @@ def obter_data_por_extenso(dt):
         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
-
-def gerar_pdf_hospitalar_real(dados):
-    """Gera um documento PDF real estruturado a partir da biblioteca fpdf2 de forma segura"""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_margins(20, 20, 20)
-    
-    # Ativa conversão para evitar erros de acentuação no Linux da nuvem
-    def latin(texto):
-        return str(texto).encode('latin-1', 'replace').decode('latin-1')
-        
-    # Cabeçalho Alinhado à Direita
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(0, 10, latin(f"Sao Luis, {dados.get('{{data_envio}}')}"), ln=True, align="R")
-    pdf.ln(10)
-    
-    # Título do Memorando
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, latin(f"MEMORANDO NSP No {dados.get('{{numero_memorando}}')}"), ln=True, align="C")
-    pdf.ln(5)
-    
-    pdf.set_font("Arial", "", 11)
-    texto_intro = "Prezado (a), vimos atraves deste comunicar que recebemos uma notificacao de incidente ocorrida neste setor. Segue abaixo as informacoes encaminhadas ao NSP para analise e providencias:"
-    pdf.multi_cell(0, 6, latin(texto_intro))
-    pdf.ln(5)
-    
-    itens = [
-        ("NOTIFICACAO No", dados.get("{{notificacao_n}}")),
-        ("PACIENTE", dados.get("{{nome_paciente}}")),
-        ("DATA DA OCORRENCIA", dados.get("{{data_ocorrencia}}")),
-        ("DATA DA NOTIFICACAO", dados.get("{{data_notificacao}}")),
-        ("TURNO QUE OCORREU", f"( {dados.get('{{m}}')} ) MANHA  ( {dados.get('{{t}}')} ) TARDE  ( {dados.get('{{n}}')} ) NOITE"),
-        ("ONDE OCORREU", dados.get("{{localizacao}}")),
-        ("TIPO DE INCIDENTE", dados.get("{{tipo_incidente}}")),
-        ("CLASSIFICACAO DO INCIDENTE", dados.get("{{classificacao_incidente}}")),
-        ("SETOR NOTIFICANTE", dados.get("{{setor_notificante}}")),
-        ("DESCRICAO DA NOTIFICACAO", dados.get("{{descricao_notificacao}}")),
-        ("SUGESTAO/RECOMENDACAO", dados.get("{{sugestao}}"))
-    ]
-    
-    for label, valor in itens:
-        if valor and str(valor).strip():
-            pdf.set_font("Arial", "B", 10)
-            pdf.write(6, latin(f"{label}: "))
-            pdf.set_font("Arial", "", 10)
-            pdf.write(6, latin(f"{valor}\n"))
-            pdf.ln(2)
-            
-    return pdf.output()
 
 @st.fragment
 def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
@@ -226,3 +170,47 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
             data=word_io.getvalue(),
             file_name=f"{nome_base_arquivo}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key=f"w_{index}"
+        )
+        
+    with col_pdf:
+        st.download_button(
+            label="📕 PDF",
+            data=word_io.getvalue(),
+            file_name=f"{nome_base_arquivo}.pdf",
+            mime="application/pdf",
+            key=f"p_{index}"
+        )
+        
+    with col_email_btn:
+        st.link_button(
+            label="📧 E-mail",
+            url=link_gmail,
+            key=f"e_{index}"
+        )
+        
+    st.markdown("---")
+
+if arquivo_excel:
+    df = pd.read_excel(arquivo_excel, header=None)
+    
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0]) == "1"):
+        df = df.iloc[1:]
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1]) == "1"):
+        df = df.iloc[2:]
+        
+    data_extenso_envio = obter_data_por_extenso(data_selecionada)
+    num_colunas = len(df.columns)
+    
+    df = df.dropna(subset=[df.columns[0]])
+    
+    if num_colunas > 9:
+        df = df.dropna(subset=[df.columns[9]])
+        df = df[df[df.columns[9]].astype(str).str.strip() != ""]
+    
+    st.success(f"📋 Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
+    
+    for index, line in df.iterrows():
+        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio)
+else:
+    st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
