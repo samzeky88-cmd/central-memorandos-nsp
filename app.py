@@ -147,7 +147,7 @@ if arquivo_excel:
                 setor_notif_val = ""
                 leito_val = ""
                 
-                # 🎯 FIXADO: Adicionado [1] no shape para contar a largura de colunas perfeitamente
+                # 🎯 CORRIGIDO: Adicionado [1] para mapear a largura de colunas de forma exata
                 for r_busca in range(min(index, 15)):
                     for c_busca in range(df.shape[1]):
                         txt_c = str(df.iloc[r_busca, c_busca]).strip().upper()
@@ -188,7 +188,6 @@ if arquivo_excel:
                 doc_instancia.save(buffer_bytes)
                 buffer_bytes.seek(0)
                 
-                # Texto de e-mail institucional exato solicitado por você
                 texto_email_formatado = (
                     f"{saudacao}\n\n"
                     f"Estamos encaminhando o Memorando Nº {num_memo_cru} em anexo para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.\n\n"
