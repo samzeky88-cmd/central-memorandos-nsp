@@ -87,7 +87,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
     descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
     
-    # Mapeamento do segundo bloco de colunas da imagem (J, K, L, M, N, O)
+    # Mapeamento do segundo bloco de colunas da imagem (J=9, K=10, L=11, M=12, N=13, O=14)
     nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
     leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
     setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
@@ -167,7 +167,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         
     with col_word:
         doc_word = Document(caminho_modelo)
-        substituir_texto_protegendo_logos(doc_word, dados_memorando)
+        substituir_texto_protecting_logos(doc_word, dados_memorando)
         word_io = io.BytesIO()
         doc_word.save(word_io)
         word_io.seek(0)
@@ -181,7 +181,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         
     with col_pdf:
         doc_pdf = Document(caminho_modelo)
-        substituir_texto_protegendo_logos(doc_pdf, dados_memorando)
+        substituir_texto_protecting_logos(doc_pdf, dados_memorando)
         pdf_io = io.BytesIO()
         doc_pdf.save(pdf_io)
         pdf_io.seek(0)
@@ -203,22 +203,18 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     st.markdown("---")
 
 if arquivo_excel:
-    # Carrega o arquivo sem assumir cabeçalhos fixos para evitar desalinhamento nas colunas da direita
     df = pd.read_excel(arquivo_excel, header=None)
     
-    # Filtra e remove linhas de títulos iniciais da planilha se existirem
-    if len(df) > 1 and ("STATUS" in str(df.iloc[0, 1]).upper() or str(df.iloc[0, 0]) == "1"):
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0, 0]) == "1"):
         df = df.iloc[1:]
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[1, 1]).upper() or str(df.iloc[1, 0]) == "1"):
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1, 0]) == "1"):
         df = df.iloc[2:]
         
     data_extenso_envio = obter_data_por_extenso(data_selecionada)
     num_colunas = len(df.columns)
     
-    # Filtra linhas vazias focando na coluna do ID da Notificação (Índice 0)
     df = df.dropna(subset=[df.columns[0]])
     
-    # Filtra e remove linhas onde a coluna de Pacientes (Índice 9) esteja totalmente limpa
     if num_colunas > 9:
         df = df.dropna(subset=[df.columns[9]])
         df = df[df[df.columns[9]].astype(str).str.strip() != ""]
@@ -227,4 +223,3 @@ if arquivo_excel:
     
     for index, linha in df.iterrows():
         renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio)
-else:
