@@ -183,23 +183,26 @@ def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso
     marca_tarde = "X" if "TARD" in turno_planilha else " " 
     marca_noite = "X" if "NOIT" in turno_planilha else " " 
 
-    dados_gerais = {
-        "num_notif": num_notif, "nome_do_paciente": nome_do_paciente, "dt_ocorr": dt_ocorr,
-        "dt_notif": dt_notif, "onde_ocorreu": onde_ocorreu, "tipo_incidente": tipo_incidente,
-        "classificacao_incidente": classification_incidente, "descricao_notificacao": descricao_notificacao,
-        "leito_paciente": leito_paciente, "setor_notificante_bruto": setor_notificante_bruto,
-        "sugestao_nsp": sugestao_nsp, "marca_manha": marca_manha, "marca_tarde": marca_tarde, "marca_noite": marca_noite
+    dados_generais = {
+        "num_notif": num_notif, 
+        "nome_do_paciente": nome_do_paciente, 
+        "dt_ocorr": dt_ocorr,
+        "dt_notif": dt_notif, 
+        "onde_ocorreu": onde_ocorreu, 
+        "tipo_incidente": tipo_incidente,
+        "classificacao_incidente": classificacao_incidente, 
+        "descricao_notificacao": descricao_notificacao,
+        "leito_paciente": leito_paciente, 
+        "setor_notificante_bruto": setor_notificante_bruto,
+        "sugestao_nsp": sugestao_nsp, 
+        "marca_manha": marca_manha, 
+        "marca_tarde": marca_tarde, 
+        "marca_noite": marca_noite
     }
-
-    # Mapeamento dinâmico dos blocos sequenciais da planilha (Setor, Gestor, Memo, Email opcional)
-    # Bloco 1: Colunas 1, 13, 14, 21 (Setor Notificado, Gestor 01, Memo 01, Email)
-    # Bloco 2: Colunas 16, 17, 18 (Setor 02, Gestor 02, Memo 02)
-    # Bloco 3: Colunas 22, 23, 24 (Setor 03, Gestor 03, Memo 03)
-    # Bloco 4: Colunas 26, 27, 28 (Setor 04, Gestor 04, Memo 04)
     
     blocos_destinos = []
     
-    # Adiciona sempre o Bloco 1 (padrão)
+    # Bloco 1 (Colunas originais: Setor Notificado, Gestor Destinatário, Nº Memo, Email)
     num_memo_1 = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else ""
     if num_memo_1 == "" or num_memo_1.upper() == "Nº MEMO 01": num_memo_1 = "S-N"
     email_1 = tratar_str_limpa(linha.iloc[21]) if num_colunas > 21 else ""
@@ -207,3 +210,11 @@ def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso
     
     blocos_destinos.append({
         "setor": tratar_str_limpa(linha.iloc[14]) if num_colunas > 14 else onde_ocorreu,
+        "gestor": tratar_str_limpa(linha.iloc[13]) if num_colunas > 13 else "GESTOR DE ENFERMAGEM",
+        "num_memo": num_memo_1,
+        "email": email_1
+    })
+    
+    # Bloco 2 (Setor Notificado 02, Gestor 02, Nº Memo 02) -> Índices 16, 17, 18
+    if num_colunas > 18:
+        setor_2 = tratar_str_limpa(linha.iloc[16])
