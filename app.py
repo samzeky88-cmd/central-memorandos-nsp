@@ -159,32 +159,30 @@ def renderizar_bloco_memorando(index, id_bloco, dados_gerais, dados_especificos,
         
     st.markdown("---") 
 
-def processar_linha_paciente_sob_demanda(index, linha, colunas_lista, data_extenso_envio):
-    # Dicionário mapeado por Strings para garantir estabilidade e impedir ocultação de índices
-    dados_linha = {}
-    for i, nome_coluna in enumerate(colunas_lista):
-        dados_linha[str(nome_coluna)] = linha.values[i]
+def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
+    # Proteção absoluta usando dicionário de posições limpas mapeadas dinamicamente
+    celula = lambda pos: str(linha.values[pos]).strip() if len(linha.values) > pos else ""
 
-    num_notif = limpar_numero_float(dados_linha.get("c_0", ""))
+    num_notif = limpar_numero_float(celula(0))
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1": 
         return 
         
-    nome_do_paciente = tratar_str_limpa(dados_linha.get("c_9", ""))
+    nome_do_paciente = tratar_str_limpa(celula(9))
     if nome_do_paciente.upper() == "PACIENTE" or nome_do_paciente == "": 
         return 
 
-    dt_ocorr = formatar_data_br(dados_linha.get("c_2", ""))
-    dt_notif = formatar_data_br(dados_linha.get("c_3", ""))
-    turno_planilha = str(dados_linha.get("c_4", "")).strip().upper()
-    onde_ocorreu = tratar_str_limpa(dados_linha.get("c_5", ""))
+    dt_ocorr = formatar_data_br(celula(2))
+    dt_notif = formatar_data_br(celula(3))
+    turno_planilha = celula(4).upper()
+    onde_ocorreu = tratar_str_limpa(celula(5))
     if onde_ocorreu == "": onde_ocorreu = "Ala B"
     
-    tipo_incidente = tratar_str_limpa(dados_linha.get("c_6", ""))
-    classificacao_incidente = tratar_str_limpa(dados_linha.get("c_7", ""))
-    descricao_notificacao = tratar_str_limpa(dados_linha.get("c_8", ""))
-    leito_paciente = limpar_numero_float(dados_linha.get("c_10", ""))
-    setor_notificante_bruto = tratar_str_limpa(dados_linha.get("c_11", ""))
-    sugestao_nsp = tratar_str_limpa(dados_linha.get("c_12", ""))
+    tipo_incidente = tratar_str_limpa(celula(6))
+    classificacao_incidente = tratar_str_limpa(celula(7))
+    descricao_notificacao = tratar_str_limpa(celula(8))
+    leito_paciente = limpar_numero_float(celula(10))
+    setor_notificante_bruto = tratar_str_limpa(celula(11))
+    sugestao_nsp = tratar_str_limpa(celula(12))
     
     if setor_notificante_bruto == "": 
         setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE" 
@@ -203,15 +201,15 @@ def processar_linha_paciente_sob_demanda(index, linha, colunas_lista, data_exten
     
     blocos_destinos = []
     
-    # Bloco 1 (Original: N, O, P, V)
-    num_memo_1 = tratar_str_limpa(dados_linha.get("c_15", ""))
+    # Bloco 1 (Original: N=13, O=14, P=15, V=21)
+    num_memo_1 = tratar_str_limpa(celula(15))
     if num_memo_1 == "" or num_memo_1.upper() == "Nº MEMO 01": num_memo_1 = "S-N"
-    email_1 = tratar_str_limpa(dados_linha.get("c_21", ""))
+    email_1 = tratar_str_limpa(celula(21))
     if email_1.upper() == "EMAIL_SETOR": email_1 = ""
     
-    setor_1 = tratar_str_limpa(dados_linha.get("c_14", ""))
+    setor_1 = tratar_str_limpa(celula(14))
     if setor_1 == "": setor_1 = onde_ocorreu
-    gestor_1 = tratar_str_limpa(dados_linha.get("c_13", ""))
+    gestor_1 = tratar_str_limpa(celula(13))
     if gestor_1 == "": gestor_1 = "GESTOR DE ENFERMAGEM"
     
     blocos_destinos.append({
@@ -221,4 +219,10 @@ def processar_linha_paciente_sob_demanda(index, linha, colunas_lista, data_exten
         "email": email_1
     })
     
-    # Bloco 2 (R=Gestor 02, S=Setor 02, T=Nº Memo 02)
+    # Bloco 2 (Colunas R=17 Gestor, S=18 Setor, T=19 Memo)
+    if num_colunas > 19:
+        gestor_2 = tratar_str_limpa(celula(17))
+        setor_2 = tratar_str_limpa(celula(18))
+        memo_2 = tratar_str_limpa(celula(19))
+        if setor_2 != "" or gestor_2 != "":
+            if memo_2 == "": memo_2 = "S-N"
