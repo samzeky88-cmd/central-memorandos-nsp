@@ -164,7 +164,7 @@ def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso
     if nome_do_paciente.upper() == "PACIENTE": 
         return 
 
-    # Coleta de dados estruturais fixos do paciente
+    # Coleta de dados estruturais fixos do paciente baseados nos índices corretos da planilha
     dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else "" 
     dt_notif = formatar_data_br(linha.iloc[3]) if num_colunas > 3 else "" 
     turno_planilha = str(linha.iloc[4]).strip().upper() if num_colunas > 4 else "" 
@@ -202,7 +202,7 @@ def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso
     
     blocos_destinos = []
     
-    # Bloco 1 (Colunas originais: Setor Notificado, Gestor Destinatário, Nº Memo, Email)
+    # Bloco 1 (Setor Notificado, Gestor Destinatário, Nº Memo, Email)
     num_memo_1 = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else ""
     if num_memo_1 == "" or num_memo_1.upper() == "Nº MEMO 01": num_memo_1 = "S-N"
     email_1 = tratar_str_limpa(linha.iloc[21]) if num_colunas > 21 else ""
@@ -215,6 +215,5 @@ def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso
         "email": email_1
     })
     
-    # Bloco 2 (Setor Notificado 02, Gestor 02, Nº Memo 02) -> Índices 16, 17, 18
+    # Bloco 2 (Setor Notificado 02, Gestor de Quem vai Receber, Nº Memo 02) -> Índices 16, 17, 18
     if num_colunas > 18:
-        setor_2 = tratar_str_limpa(linha.iloc[16])
