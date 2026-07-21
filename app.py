@@ -70,67 +70,50 @@ def obter_data_por_extenso(dt):
     return f"{dt.day} de {meses[dt.month]} de {dt.year}" 
 
 @st.fragment 
-def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio): 
-    num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N" 
-    if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1": 
-        return 
-    dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else "" 
-    dt_notif = formatar_data_br(linha.iloc[3]) if num_colunas > 3 else "" 
-    turno_planilha = str(linha.iloc[4]).strip().upper() if num_colunas > 4 else "" 
-    onde_ocorreu = tratar_str_limpa(linha.iloc[5]) if num_colunas > 5 else "Ala B" 
-    tipo_incidente = tratar_str_limpa(linha.iloc[6]) if num_colunas > 6 else "" 
-    classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else "" 
-    descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else "" 
-    nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado" 
-    if nome_do_paciente.upper() == "PACIENTE": 
-        return 
-    leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else "" 
-    setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else "" 
-    sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else "" 
-    gestor_destinatario = tratar_str_limpa(linha.iloc[13]) if num_colunas > 13 else "GESTOR DE ENFERMAGEM" 
-    setor_notificado_final = tratar_str_limpa(linha.iloc[14]) if num_colunas > 14 else onde_ocorreu 
-    num_memo_cru = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else "" 
-    if num_memo_cru == "" or num_memo_cru.upper() == "Nº MEMO 01": 
-        num_memo_cru = "S-N" 
-    email_destino = tratar_str_limpa(linha.iloc[21]) if num_colunas > 21 else "" 
-    if email_destino.upper() == "EMAIL_SETOR": 
-        return 
+def renderizar_bloco_memorando(index, id_bloco, dados_gerais, dados_especificos, data_extenso_envio):
+    """Renderiza um card específico de memorando na interface para o usuário."""
+    num_notif = dados_gerais["num_notif"]
+    nome_do_paciente = dados_gerais["nome_do_paciente"]
+    
+    num_memo_cru = dados_especificos["num_memo"]
+    gestor_destinatario = dados_especificos["gestor"]
+    setor_notificado_final = dados_especificos["setor"]
+    email_destino = dados_especificos["email"]
+
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip() 
     nome_base_arquivo = f"MEMORANDO Nº {num_memo_limpo}_NOTIFICAÇÃO_Nº {num_notif}_I_NSP" 
-    marca_manha = "X" if "MANH" in turno_planilha else " " 
-    marca_tarde = "X" if "TARD" in turno_planilha else " " 
-    marca_noite = "X" if "NOIT" in turno_planilha else " " 
-    if setor_notificante_bruto == "": 
-        setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE" 
+    
     dados_memorando = { 
         "{{numero_memorando}}": num_memo_cru, 
         "{{gestor}}": gestor_destinatario, 
         "{{setor}}": setor_notificado_final, 
         "{{notificacao_n}}": num_notif, 
-        "{{data_notificacao}}": dt_notif, 
-        "{{data_ocorrencia}}": dt_ocorr, 
-        "{{localizacao}}": onde_ocorreu, 
-        "{{tipo_incidente}}": tipo_incidente, 
-        "{{classificacao_incidente}}": classificacao_incidente, 
-        "{{descricao_notificacao}}": descricao_notificacao, 
+        "{{data_notificacao}}": dados_gerais["dt_notif"], 
+        "{{data_ocorrencia}}": dados_gerais["dt_ocorr"], 
+        "{{localizacao}}": dados_gerais["onde_ocorreu"], 
+        "{{tipo_incidente}}": dados_gerais["tipo_incidente"], 
+        "{{classificacao_incidente}}": dados_gerais["classificacao_incidente"], 
+        "{{descricao_notificacao}}": dados_gerais["descricao_notificacao"], 
         "{{nome_paciente}}": nome_do_paciente, 
-        "{{leito}}": leito_paciente, 
-        "{{setor_notificante}}": setor_notificante_bruto, 
-        "{{sugestao}}": sugestao_nsp, 
-        "{{m}}": marca_manha, 
-        "{{t}}": marca_tarde, 
-        "{{n}}": marca_noite, 
+        "{{leito}}": dados_gerais["leito_paciente"], 
+        "{{setor_notificante}}": dados_gerais["setor_notificante_bruto"], 
+        "{{sugestao}}": dados_gerais["sugestao_nsp"], 
+        "{{m}}": dados_gerais["marca_manha"], 
+        "{{t}}": dados_gerais["marca_tarde"], 
+        "{{n}}": dados_gerais["marca_noite"], 
         "{{data_envio}}": data_extenso_envio 
     } 
+    
     fuso_brasilia = timezone(timedelta(hours=-3)) 
     hora_atual = datetime.now(fuso_brasilia).hour 
     saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados" 
+    
     corpo_email = ( 
         f"{saudacao},\n\n" 
         f"Segue em Anexo o Memorando Nº {num_memo_cru} para ser analisado e respondido " 
         f"(via e-mail) em até 15 dias após a data presente.\n\n" 
         f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para " 
-        f"arquivamento de respostas conforme rotina institutional. Não serão aceitas mensagens " 
+        f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens " 
         f"via e-mail sem arquivo como resposta.\n\n" 
         f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP:\n" 
         f"• Memorando: Nº {num_memo_cru}\n" 
@@ -139,11 +122,15 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         f"Ezequias S. Santos\n" 
         f"Agente Administrativo" 
     ) 
+    
     col_nome, col_word, col_pdf, col_copiar = st.columns([1.5, 0.8, 0.8, 1.8]) 
+    
     with col_nome: 
         st.markdown(f"**🔹 {nome_do_paciente}**") 
+        st.caption(f"📍 Destino: **{gestor_destinatario}** ({setor_notificado_final})")
         if email_destino: 
             st.caption(f"📧 Destinatário: {email_destino}") 
+            
     with col_word: 
         doc_word = Document(caminho_modelo) 
         substituir_texto_protegendo_logos(doc_word, dados_memorando) 
@@ -155,34 +142,78 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
             data=word_io.getvalue(), 
             file_name=f"{nome_base_arquivo}.docx", 
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-            key=f"w_{index}" 
+            key=f"w_{index}_{id_bloco}" 
         ) 
+        
     with col_pdf: 
         st.download_button( 
             label="📕 PDF", 
             data=word_io.getvalue(), 
             file_name=f"{nome_base_arquivo}.pdf", 
             mime="application/pdf", 
-            key=f"p_{index}" 
+            key=f"p_{index}_{id_bloco}" 
         ) 
+        
     with col_copiar: 
         st.code(corpo_email, language="text") 
+        
     st.markdown("---") 
 
-if arquivo_excel: 
-    df = pd.read_excel(arquivo_excel, header=None) 
-    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0]) == "1"): 
-        df = df.iloc[1:] 
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1]) == "1"): 
-        df = df.iloc[2:] 
-    data_extenso_envio = obter_data_por_extenso(data_selecionada) 
-    num_colunas = len(df.columns) 
-    df = df.dropna(subset=[df.columns[0]]) 
-    if num_colunas > 9: 
-        df = df.dropna(subset=[df.columns[9]]) 
-        df = df[df[df.columns[9]].astype(str).str.strip() != ""] 
-    st.success(f"📋 Lista de verificação pronta! {len(df)} memorandos estruturados e validados.") 
-    for index, line in df.iterrows(): 
-        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio) 
-else: 
-    st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
+def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
+    # Função interna para contornar limitações de renderização textual de chaves
+    def obter_val(i):
+        return linha.iloc[i]
+
+    num_notif = limpar_numero_float(obter_val(0)) if num_colunas > 0 else "S-N" 
+    if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1": 
+        return 
+        
+    nome_do_paciente = tratar_str_limpa(obter_val(9)) if num_colunas > 9 else "Paciente Não Identificado" 
+    if nome_do_paciente.upper() == "PACIENTE": 
+        return 
+
+    dt_ocorr = formatar_data_br(obter_val(2)) if num_colunas > 2 else "" 
+    dt_notif = formatar_data_br(obter_val(3)) if num_colunas > 3 else "" 
+    turno_planilha = str(obter_val(4)).strip().upper() if num_colunas > 4 else "" 
+    onde_ocorreu = tratar_str_limpa(obter_val(5)) if num_colunas > 5 else "Ala B" 
+    tipo_incidente = tratar_str_limpa(obter_val(6)) if num_colunas > 6 else "" 
+    classificacao_incidente = tratar_str_limpa(obter_val(7)) if num_colunas > 7 else "" 
+    descricao_notificacao = tratar_str_limpa(obter_val(8)) if num_colunas > 8 else "" 
+    leito_paciente = limpar_numero_float(obter_val(10)) if num_colunas > 10 else "" 
+    setor_notificante_bruto = tratar_str_limpa(obter_val(11)) if num_colunas > 11 else "" 
+    sugestao_nsp = tratar_str_limpa(obter_val(12)) if num_colunas > 12 else "" 
+    
+    if setor_notificante_bruto == "": 
+        setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE" 
+
+    marca_manha = "X" if "MANH" in turno_planilha else " " 
+    marca_tarde = "X" if "TARD" in turno_planilha else " " 
+    marca_noite = "X" if "NOIT" in turno_planilha else " " 
+
+    dados_gerais = {
+        "num_notif": num_notif, "nome_do_paciente": nome_do_paciente, "dt_ocorr": dt_ocorr,
+        "dt_notif": dt_notif, "onde_ocorreu": onde_ocorreu, "tipo_incidente": tipo_incidente,
+        "classificacao_incidente": classificacao_incidente, "descricao_notificacao": descricao_notificacao,
+        "leito_paciente": leito_paciente, "setor_notificante_bruto": setor_notificante_bruto,
+        "sugestao_nsp": sugestao_nsp, "marca_manha": marca_manha, "marca_tarde": marca_tarde, "marca_noite": marca_noite
+    }
+    
+    blocos_destinos = []
+    
+    # Bloco 1 (Original)
+    num_memo_1 = tratar_str_limpa(obter_val(15)) if num_colunas > 15 else ""
+    if num_memo_1 == "" or num_memo_1.upper() == "Nº MEMO 01": num_memo_1 = "S-N"
+    email_1 = tratar_str_limpa(obter_val(21)) if num_colunas > 21 else ""
+    if email_1.upper() == "EMAIL_SETOR": email_1 = ""
+    
+    blocos_destinos.append({
+        "setor": tratar_str_limpa(obter_val(14)) if num_colunas > 14 else onde_ocorreu,
+        "gestor": tratar_str_limpa(obter_val(13)) if num_colunas > 13 else "GESTOR DE ENFERMAGEM",
+        "num_memo": num_memo_1,
+        "email": email_1
+    })
+    
+    # Bloco 2 (Colunas R=17, S=18, T=19)
+    if num_colunas > 19:
+        gestor_2 = tratar_str_limpa(obter_val(17))
+        setor_2 = tratar_str_limpa(obter_val(18))
