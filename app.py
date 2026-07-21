@@ -160,28 +160,29 @@ def renderizar_bloco_memorando(index, id_bloco, dados_gerais, dados_especificos,
     st.markdown("---") 
 
 def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
-    # Trava os valores da linha em variáveis normais de Python
-    valores_linha = list(linha)
-    total_cols = len(valores_linha)
+    # Criação de um dicionário nomeado para blindar os dados e evitar cortes da inteligência artificial
+    info = {}
+    for i, val in enumerate(linha):
+        info[int(i)] = val
 
-    num_notif = limpar_numero_float(valores_linha[0]) if total_cols > 0 else "S-N" 
+    num_notif = limpar_numero_float(info.get(0, "")) if num_colunas > 0 else "S-N" 
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1": 
         return 
         
-    nome_do_paciente = tratar_str_limpa(valores_linha[9]) if total_cols > 9 else "Paciente Não Identificado" 
+    nome_do_paciente = tratar_str_limpa(info.get(9, "")) if num_colunas > 9 else "Paciente Não Identificado" 
     if nome_do_paciente.upper() == "PACIENTE": 
         return 
 
-    dt_ocorr = formatar_data_br(valores_linha[2]) if total_cols > 2 else "" 
-    dt_notif = formatar_data_br(valores_linha[3]) if total_cols > 3 else "" 
-    turno_planilha = str(valores_linha[4]).strip().upper() if total_cols > 4 else "" 
-    onde_ocorreu = tratar_str_limpa(valores_linha[5]) if total_cols > 5 else "Ala B" 
-    tipo_incidente = tratar_str_limpa(valores_linha[6]) if total_cols > 6 else "" 
-    classificacao_incidente = tratar_str_limpa(valores_linha[7]) if total_cols > 7 else "" 
-    descricao_notificacao = tratar_str_limpa(valores_linha[8]) if total_cols > 8 else "" 
-    leito_paciente = limpar_numero_float(valores_linha[10]) if total_cols > 10 else "" 
-    setor_notificante_bruto = tratar_str_limpa(valores_linha[11]) if total_cols > 11 else "" 
-    sugestao_nsp = tratar_str_limpa(valores_linha[12]) if total_cols > 12 else "" 
+    dt_ocorr = formatar_data_br(info.get(2, "")) if num_colunas > 2 else "" 
+    dt_notif = formatar_data_br(info.get(3, "")) if num_colunas > 3 else "" 
+    turno_planilha = str(info.get(4, "")).strip().upper() if num_colunas > 4 else "" 
+    onde_ocorreu = tratar_str_limpa(info.get(5, "")) if num_colunas > 5 else "Ala B" 
+    tipo_incidente = tratar_str_limpa(info.get(6, "")) if num_colunas > 6 else "" 
+    classificacao_incidente = tratar_str_limpa(info.get(7, "")) if num_colunas > 7 else "" 
+    descricao_notificacao = tratar_str_limpa(info.get(8, "")) if num_colunas > 8 else "" 
+    leito_paciente = limpar_numero_float(info.get(10, "")) if num_colunas > 10 else "" 
+    setor_notificante_bruto = tratar_str_limpa(info.get(11, "")) if num_colunas > 11 else "" 
+    sugestao_nsp = tratar_str_limpa(info.get(12, "")) if num_colunas > 12 else "" 
     
     if setor_notificante_bruto == "": 
         setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE" 
@@ -201,17 +202,15 @@ def processar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso
     blocos_destinos = []
     
     # Bloco 1 (Original: N=13, O=14, P=15, V=21)
-    num_memo_1 = tratar_str_limpa(valores_linha[15]) if total_cols > 15 else ""
+    num_memo_1 = tratar_str_limpa(info.get(15, "")) if num_colunas > 15 else ""
     if num_memo_1 == "" or num_memo_1.upper() == "Nº MEMO 01": num_memo_1 = "S-N"
-    email_1 = tratar_str_limpa(valores_linha[21]) if total_cols > 21 else ""
+    email_1 = tratar_str_limpa(info.get(21, "")) if num_colunas > 21 else ""
     if email_1.upper() == "EMAIL_SETOR": email_1 = ""
     
     blocos_destinos.append({
-        "setor": tratar_str_limpa(valores_linha[14]) if total_cols > 14 else onde_ocorreu,
-        "gestor": tratar_str_limpa(valores_linha[13]) if total_cols > 13 else "GESTOR DE ENFERMAGEM",
+        "setor": tratar_str_limpa(info.get(14, "")) if num_colunas > 14 else onde_ocorreu,
+        "gestor": tratar_str_limpa(info.get(13, "")) if num_colunas > 13 else "GESTOR DE ENFERMAGEM",
         "num_memo": num_memo_1,
         "email": email_1
     })
     
-    # Bloco 2 (Baseado na imagem real: R=17 Gestor, S=18 Setor, T=19 Memo)
-    if total_cols > 19:
