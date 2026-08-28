@@ -84,7 +84,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
         return
 
-    # [MUDANÇA INTEGRADA]: Captura o status da coluna B (índice 1) da sua planilha
     status_envio = str(linha.iloc[1]).strip().upper() if num_colunas > 1 else ""
 
     dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else ""
@@ -148,25 +147,25 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     hora_atual = datetime.now(fuso_brasilia).hour
     saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
 
+    # [CORRIGIDO]: Ajustado o prefixo do memorando e atualizado o cargo administrativo da assinatura
     corpo_email = (
         f"{saudacao},\n\n"
-        f"Segue em Anexo o Memorando N° {num_memo_cru} para ser analisado e respondido "
+        f"Segue em Anexo o Memorando {num_memo_cru} para ser analisado e respondido "
         f"(via e-mail) em até 15 dias após a data presente.\n\n"
         f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para "
         f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens "
         f"via e-mail sem arquivo como resposta.\n\n"
         f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP:\n"
-        f"• Memorando: N° {num_memo_cru}\n"
-        f"• Notificação: N° {num_notif}\n\n"
+        f"• Memorando: {num_memo_cru}\n"
+        f"• Notificação: N°  {num_notif}\n\n"
         f"Atenciosamente,\n"
         f"Ezequias S. Santos\n"
-        f"Agente Administrativo"
+        f"Agente Administrativo - NAQH & NSP"
     )
 
     col_nome, col_word, col_pdf, col_copiar = st.columns([1.5, 0.8, 0.8, 1.8])
 
     with col_nome:
-        # [MUDANÇA INTEGRADA]: Se na coluna B estiver "ENVIADO", o texto do nome do paciente será riscado
         if status_envio == "ENVIADO":
             st.markdown(f"~~{nome_do_paciente}~~ 🟢 *(Já Enviado)*")
         else:
