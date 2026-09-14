@@ -54,7 +54,7 @@ lista_setores = {
     "EQUIPE MULTIPROFISSIONAL": "emtn.hcid@gmail.com"
 }
 
-# ------------------- BUSCA INTELIGENTE -------------------
+# ------------------- ✅ FUNÇÃO CORRIGIDA DEFINITIVAMENTE -------------------
 def encontrar_email(setor_nome):
     if pd.isna(setor_nome) or not str(setor_nome).strip():
         return ""
@@ -62,8 +62,8 @@ def encontrar_email(setor_nome):
     if nome_limpo in lista_setores:
         return lista_setores[nome_limpo]
     for chave, email in lista_setores.items():
-        chave_limpa = chave.upper()
-        if nome_limpo in chave_limpa or chave_limpa in nome_limpa:
+        chave_limpa = chave.upper()  # ✅ PRIMEIRO CRIA
+        if nome_limpo in chave_limpa or chave_limpa in nome_limpa:  # ✅ DEPOIS USA
             return email
     return ""
 
@@ -187,17 +187,17 @@ with cab_dir:
     """, unsafe_allow_html=True)
 st.divider()
 
-# AVISO IMPORTANTE
+# AVISO
 st.info("ℹ️ O sistema irá GERAR e BAIXAR os Memorandos e Roteiros em Word. Você anexa e envia manualmente pelo e-mail. ✅")
 st.divider()
 
-# DATA DE ENVIO
+# DATA
 st.subheader("📅 Configuração da Data de Envio")
 data_envio = st.date_input("Selecione a data que sairá no cabeçalho do Memorando:", value=datetime.now())
 data_formatada = data_envio.strftime("%d/%m/%Y")
 st.divider()
 
-# UPLOAD DA PLANILHA
+# UPLOAD
 st.subheader("📊 Suba a planilha contendo os incidentes (.xlsx)")
 arquivo_excel = st.file_uploader("Selecione o arquivo Excel", type=["xlsx"], label_visibility="collapsed")
 
@@ -211,7 +211,7 @@ if arquivo_excel:
     st.dataframe(df, use_container_width=True)
     st.divider()
 
-    # TABELA DE CONFERÊNCIA (SÓ PARA VOCÊ VER)
+    # TABELA DE E-MAILS
     st.subheader("🔍 Conferência de E-mails (apenas consulta)")
     conferencia = []
 
@@ -246,7 +246,6 @@ if arquivo_excel:
             num_memo_atual = linha.get("Nº Memo", st.session_state.contador_memo)
             setor_nome = str(linha.get("SETOR NOTIFICADO", linha.get("Setor Notificado", ""))).strip()
             
-            # Descobre o e-mail só pra te mostrar
             email_da_planilha = str(linha.get("EMAIL_SETOR", linha.get("Email Setor", ""))).strip()
             if email_da_planilha and "@" in email_da_planilha:
                 email_final = email_da_planilha
@@ -277,11 +276,9 @@ if arquivo_excel:
             else:
                 st.warning("⚠️ E-mail não encontrado — preencher manualmente")
 
-            # GERA OS DOIS ARQUIVOS
             arq_memo = gerar_memorando_word(dados)
             arq_roteiro = gerar_roteiro_word(dados)
 
-            # BOTÕES DE DOWNLOAD
             dl1, dl2 = st.columns([1, 1])
             with dl1:
                 st.download_button(f"📄 Baixar Memorando", arq_memo,
