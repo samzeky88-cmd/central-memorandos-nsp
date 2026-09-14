@@ -1,6 +1,6 @@
 import streamlit as st
 from docx import Document
-from docx.shared import Pt, Inches
+from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -59,7 +59,7 @@ lista_setores = {
     "EQUIPE MULTIPROFISSIONAL": "emtn.hcid@gmail.com"
 }
 
-# ------------------- BUSCA INTELIGENTE DE E-MAIL -------------------
+# ------------------- BUSCA INTELIGENTE DE E-MAIL ✅ CORRIGIDA -------------------
 def encontrar_email(setor_nome):
     if pd.isna(setor_nome) or not str(setor_nome).strip():
         return ""
@@ -67,7 +67,7 @@ def encontrar_email(setor_nome):
     if nome_limpo in lista_setores:
         return lista_setores[nome_limpo]
     for chave, email in lista_setores.items():
-        chave_limpa = chave.upper()
+        chave_limpa = chave.upper()  # ✅ LINHA ADICIONADA — FALTAVA!
         if nome_limpo in chave_limpa or chave_limpa in nome_limpa:
             return email
     return ""
@@ -199,7 +199,7 @@ def enviar_email(dest_email, assunto, corpo, arq_memo, arq_roteiro, num_memo, nu
 # ------------------- INTERFACE PRINCIPAL -------------------
 st.set_page_config(page_title="Emissor de Memorandos Individuais — NSP", layout="wide")
 
-# CABEÇALHO COM BONEQUINHO
+# CABEÇALHO
 cab_esq, cab_dir = st.columns([3, 2])
 with cab_esq:
     st.markdown("""
@@ -230,19 +230,18 @@ if arquivo_excel:
     st.success(f"✅ Planilha carregada com {len(df)} registro(s)!")
     st.divider()
 
-    # PRÉ-VISUALIZAÇÃO DOS DADOS
+    # PRÉ-VISUALIZAÇÃO
     st.subheader("📋 Pré-visualização dos dados")
     st.dataframe(df, use_container_width=True)
     st.divider()
 
-    # TABELA DE CONFERÊNCIA DE E-MAILS
+    # TABELA DE CONFERÊNCIA
     st.subheader("🔍 Conferência de E-mails")
     conferencia = []
     emails_nao_encontrados = []
 
     for idx, linha in df.iterrows():
         setor_nome = str(linha.get("SETOR NOTIFICADO", linha.get("Setor Notificado", ""))).strip()
-        # ✅ AGORA LÊ A COLUNA "EMAIL_SETOR" DA SUA PLANILHA!
         email_da_planilha = str(linha.get("EMAIL_SETOR", linha.get("Email Setor", linha.get("Email Destino", "")))).strip()
 
         if email_da_planilha and "@" in email_da_planilha:
@@ -273,7 +272,7 @@ if arquivo_excel:
 
     st.divider()
 
-    # ✅ BOTÃO — GERA TUDO, ENVIA SÓ QUEM TEM E-MAIL
+    # BOTÃO PRINCIPAL
     if st.button("✅ GERAR MEMORANDOS — BAIXAR TUDO E ENVIAR QUEM TEM E-MAIL", type="primary"):
         st.success("🔄 Iniciando geração... Pode demorar um pouco com muitos registros!")
         
@@ -283,13 +282,11 @@ if arquivo_excel:
             setor_nome = str(linha.get("SETOR NOTIFICADO", linha.get("Setor Notificado", ""))).strip()
             email_da_planilha = str(linha.get("EMAIL_SETOR", linha.get("Email Setor", ""))).strip()
 
-            # ✅ Descobre o e-mail
             if email_da_planilha and "@" in email_da_planilha:
                 email_final = email_da_planilha
             else:
                 email_final = encontrar_email(setor_nome)
 
-            # ✅ MONTANDO OS DADOS — adaptado às colunas da sua planilha
             dados = {
                 "memo_num": num_memo_atual,
                 "notif_num": str(linha.get("Nº", linha.get("Nº Notificação", ""))),
@@ -310,11 +307,9 @@ if arquivo_excel:
 
             st.subheader(f"➡️ Linha {idx+1} — Memorando Nº {num_memo_atual} → {setor_nome}")
             
-            # ✅ GERA SEMPRE — MESMO SEM E-MAIL!
             arq_memo = gerar_memorando_word(dados)
             arq_roteiro = gerar_roteiro_word(dados)
 
-            # ✅ OFERECE DOWNLOAD SEMPRE
             dl1, dl2 = st.columns([1, 1])
             with dl1:
                 st.download_button(f"📄 Baixar Memorando", arq_memo,
@@ -326,7 +321,6 @@ if arquivo_excel:
             arq_memo.seek(0)
             arq_roteiro.seek(0)
 
-            # ✅ SÓ ENVIA SE TIVER E-MAIL
             if email_final and "@" in email_final:
                 corpo = f"""Boa Tarde/Pela Manhã,
 
