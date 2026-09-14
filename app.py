@@ -281,7 +281,7 @@ with cab_dir:
 st.divider()
 
 # ✅ INSTRUÇÃO CLARA
-st.info("ℹ️ ✅ BASTA COLOCAR UM TRAÇÃO '-' na coluna Resposta = JÁ ENVIADO! Vazio = gera normalmente! Sem pular números!")
+st.info("ℹ️ ✅ MOSTRA TODOS OS NÚMEROS! Pendentes = botão de baixar | Com '-' = tarja riscada (não some mais!)")
 st.divider()
 
 st.subheader("📅 Configuração da Data de Envio")
@@ -311,8 +311,8 @@ if arquivo_excel:
     st.dataframe(df, use_container_width=True)
     st.divider()
 
-    if st.button("✅ GERAR APENAS PENDENTES", type="primary"):
-        st.success("🔄 Processando... Pode demorar um pouco!")
+    if st.button("✅ GERAR TODOS — INCLUSIVE JÁ ENVIADOS", type="primary"):
+        st.success("🔄 Processando... MOSTRANDO TODOS OS NÚMEROS (ninguém mais some!)")
         qtd_gerados = 0
         qtd_enviados = 0
         qtd_nao_enviar = 0
@@ -328,7 +328,7 @@ if arquivo_excel:
             val2 = linha.get("Nº Notificação")
             num_notif = limpar_numero_notif(val1 if pd.notna(val1) else val2)
 
-            # ✅ PERCORRE TODOS OS MEMORANDOS — SEM PULAR NÚMERO
+            # ✅ PERCORRE TODOS — NENHUM NÚMERO SOME!
             for cfg in MEMORANDOS:
                 memo_texto = str(linha.get(cfg["memo"], "")).strip()
                 setor_nome = str(linha.get(cfg["setor"], "")).strip()
@@ -338,21 +338,12 @@ if arquivo_excel:
                 if not memo_texto or memo_texto == "nan" or not setor_nome or setor_nome == "nan":
                     continue
 
-                # ✅ BASTA TER "-" = JÁ ENVIADO!
-                if tem_resposta(resposta_coluna):
-                    qtd_enviados += 1
-                    st.markdown(f"""
-                    <div style="opacity:0.5; padding:12px; border:2px solid #d4af37; border-radius:8px; background:#fff9e6;">
-                        <h3 style="text-decoration: line-through; color:#999; margin:0;">📄 {memo_texto} | {paciente} → {setor_nome}</h3>
-                        <p style="color:#b8860b; font-weight:bold; margin:8px 0 0 0;">━━━━━━━━━━━━━━━━ ✅ JÁ ENVIADO ━━━━━━━━━━━━━━━━</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.divider()
-                    continue
-
                 num_memo_atual = limpar_numero_memo(memo_texto)
                 if not num_memo_atual:
                     continue
+
+                # ✅ VERIFICAÇÃO DE STATUS
+                memo_ja_enviado = tem_resposta(resposta_coluna)
 
                 # ⛔ NÃO ENVIAR
                 if eh_nao_enviar:
@@ -366,7 +357,19 @@ if arquivo_excel:
                     st.divider()
                     continue
 
-                # ✅ PENDENTE → GERA!
+                # ✅ JÁ ENVIADO → MOSTRA TARJA MAS NÃO SOME!
+                if memo_ja_enviado:
+                    qtd_enviados += 1
+                    st.markdown(f"""
+                    <div style="opacity:0.5; padding:12px; border:2px solid #d4af37; border-radius:8px; background:#fff9e6;">
+                        <h3 style="text-decoration: line-through; color:#999; margin:0;">📄 {memo_texto} | {paciente} → {setor_nome}</h3>
+                        <p style="color:#b8860b; font-weight:bold; margin:8px 0 0 0;">━━━━━━━━━━━━━━━━ ✅ JÁ ENVIADO ━━━━━━━━━━━━━━━━</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.divider()
+                    continue
+
+                # ✅ PENDENTE → GERA COM BOTÃO DE BAIXAR
                 email_final = encontrar_email(setor_nome)
 
                 dados = {
@@ -427,11 +430,11 @@ Agente Administrativo - NAQH & NSP
                 st.divider()
                 qtd_gerados += 1
 
-        st.success(f"✅ **PROCESSO CONCLUÍDO!**")
+        st.success(f"✅ **PROCESSO CONCLUÍDO! TODOS OS NÚMEROS EXIBIDOS!**")
         st.markdown(f"""
-        - 📋 **{qtd_gerados} memorandos gerados (PENDENTES)**
-        - ✅ **{qtd_enviados} já enviados** — tarja riscada
+        - 📋 **{qtd_gerados} memorandos gerados (PENDENTES — com botão de baixar)**
+        - ✅ **{qtd_enviados} já enviados** — tarja riscada, NÃO SUMIU!
         - ⛔ **{qtd_nao_enviar} marcados como NÃO ENVIAR**
         """)
 
-st.caption("👨‍💻 Coluna Resposta: Vazio = GERA | '-' = JÁ ENVIADO | Sem pular números ✅")
+st.caption("👨‍💻 Nenhum número some mais! '-' = tarja riscada e continua visível ✅ Vazio = gera com botão ✅")
