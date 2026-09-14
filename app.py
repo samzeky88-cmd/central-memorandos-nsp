@@ -2,16 +2,11 @@ import streamlit as st
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
 from datetime import datetime
 import io
 import pandas as pd
 
 # ------------------- CONFIGURAÇÕES -------------------
-EMAIL_REMETENTE = "nspsoc2@gmail.com"
 ANO = "2026"
 
 # ------------------- LISTA DE E-MAILS DOS SETORES -------------------
@@ -59,7 +54,7 @@ lista_setores = {
     "EQUIPE MULTIPROFISSIONAL": "emtn.hcid@gmail.com"
 }
 
-# ------------------- BUSCA INTELIGENTE DE E-MAIL ✅ CORRIGIDA -------------------
+# ------------------- BUSCA INTELIGENTE -------------------
 def encontrar_email(setor_nome):
     if pd.isna(setor_nome) or not str(setor_nome).strip():
         return ""
@@ -67,16 +62,16 @@ def encontrar_email(setor_nome):
     if nome_limpo in lista_setores:
         return lista_setores[nome_limpo]
     for chave, email in lista_setores.items():
-        chave_limpa = chave.upper()  # ✅ LINHA ADICIONADA — FALTAVA!
+        chave_limpa = chave.upper()
         if nome_limpo in chave_limpa or chave_limpa in nome_limpa:
             return email
     return ""
 
-# ------------------- CONTADORES -------------------
+# ------------------- CONTADOR -------------------
 if "contador_memo" not in st.session_state:
     st.session_state.contador_memo = 1195
 
-# ------------------- GERAR MEMORANDO WORD -------------------
+# ------------------- GERAR MEMORANDO -------------------
 def gerar_memorando_word(dados):
     doc = Document()
     cab = doc.add_paragraph()
@@ -126,7 +121,7 @@ def gerar_memorando_word(dados):
     buffer.seek(0)
     return buffer
 
-# ------------------- GERAR ROTEIRO OFICIAL -------------------
+# ------------------- GERAR ROTEIRO -------------------
 def gerar_roteiro_word(dados):
     doc = Document()
     cab = doc.add_paragraph()
@@ -173,37 +168,14 @@ def gerar_roteiro_word(dados):
     buffer.seek(0)
     return buffer
 
-# ------------------- ENVIAR E-MAIL -------------------
-def enviar_email(dest_email, assunto, corpo, arq_memo, arq_roteiro, num_memo, num_notif):
-    msg = MIMEMultipart()
-    msg["From"] = EMAIL_REMETENTE
-    msg["To"] = dest_email
-    msg["Subject"] = assunto
-    msg.attach(MIMEText(corpo, "plain", "utf-8"))
-    anexo1 = MIMEApplication(arq_memo.read())
-    anexo1.add_header("Content-Disposition", "attachment", filename=f"Memorando_NSP_{num_memo}_Notif_{num_notif}.docx")
-    msg.attach(anexo1)
-    anexo2 = MIMEApplication(arq_roteiro.read())
-    anexo2.add_header("Content-Disposition", "attachment", filename=f"Roteiro_Tratativa_Notif_{num_notif}.docx")
-    msg.attach(anexo2)
-    arq_memo.seek(0)
-    arq_roteiro.seek(0)
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as serv:
-        senha = st.secrets.get("senha_gmail", "")
-        if not senha:
-            return False, "Senha de app não configurada nos Segredos"
-        serv.login(EMAIL_REMETENTE, senha)
-        serv.send_message(msg)
-    return True, "✅ ENVIADO COM SUCESSO!"
-
 # ------------------- INTERFACE PRINCIPAL -------------------
-st.set_page_config(page_title="Emissor de Memorandos Individuais — NSP", layout="wide")
+st.set_page_config(page_title="Gerador de Memorandos — NSP", layout="wide")
 
 # CABEÇALHO
 cab_esq, cab_dir = st.columns([3, 2])
 with cab_esq:
     st.markdown("""
-    <h1 style="margin-top: 10px; margin-bottom: 0; font-size: 26px;">📄 Emissor de Memorandos Individuais — Hospital Dr. Jackson Lago</h1>
+    <h1 style="margin-top: 10px; margin-bottom: 0; font-size: 26px;">📄 Gerador de Memorandos — Hospital Dr. Jackson Lago</h1>
     """, unsafe_allow_html=True)
 with cab_dir:
     st.markdown("""
@@ -213,6 +185,10 @@ with cab_dir:
         <p style="font-size: 14px; font-style: italic; margin: 0; color: #d0d0d0;">Ezequias S. Santos</p>
     </div>
     """, unsafe_allow_html=True)
+st.divider()
+
+# AVISO IMPORTANTE
+st.info("ℹ️ O sistema irá GERAR e BAIXAR os Memorandos e Roteiros em Word. Você anexa e envia manualmente pelo e-mail. ✅")
 st.divider()
 
 # DATA DE ENVIO
@@ -235,10 +211,9 @@ if arquivo_excel:
     st.dataframe(df, use_container_width=True)
     st.divider()
 
-    # TABELA DE CONFERÊNCIA
-    st.subheader("🔍 Conferência de E-mails")
+    # TABELA DE CONFERÊNCIA (SÓ PARA VOCÊ VER)
+    st.subheader("🔍 Conferência de E-mails (apenas consulta)")
     conferencia = []
-    emails_nao_encontrados = []
 
     for idx, linha in df.iterrows():
         setor_nome = str(linha.get("SETOR NOTIFICADO", linha.get("Setor Notificado", ""))).strip()
@@ -249,39 +224,30 @@ if arquivo_excel:
             status = "✅ Usado da planilha"
         else:
             email_final = encontrar_email(setor_nome)
-            if email_final:
-                status = f"✅ Encontrado: {email_final}"
-            else:
-                status = "⚠️ SEM E-MAIL — BAIXAR APENAS"
-                emails_nao_encontrados.append(f"Linha {idx+1} — {setor_nome}")
+            status = f"✅ Encontrado" if email_final else "⚠️ Sem cadastro"
 
         conferencia.append({
             "Linha": idx + 1,
             "Setor": setor_nome,
-            "E-mail": email_final if email_final else "⚠️ BAIXAR MANUAL",
+            "E-mail": email_final if email_final else "⚠️ Preencher manual",
             "Status": status
         })
 
     st.dataframe(pd.DataFrame(conferencia), use_container_width=True)
-
-    if emails_nao_encontrados:
-        st.info(f"ℹ️ {len(emails_nao_encontrados)} sem e-mail → SERÃO GERADOS, MAS NÃO SERÃO ENVIADOS!")
-        st.info("💡 Preencha a coluna 'EMAIL_SETOR' na planilha para esses setores e faça upload novamente para enviar!")
-    else:
-        st.success("✅ TODOS OK! Pode gerar e enviar!")
-
+    st.info("💡 Use a coluna 'E-mail' acima para saber para qual endereço enviar manualmente.")
     st.divider()
 
-    # BOTÃO PRINCIPAL
-    if st.button("✅ GERAR MEMORANDOS — BAIXAR TUDO E ENVIAR QUEM TEM E-MAIL", type="primary"):
-        st.success("🔄 Iniciando geração... Pode demorar um pouco com muitos registros!")
+    # BOTÃO DE GERAÇÃO
+    if st.button("✅ GERAR TODOS OS MEMORANDOS E ROTEIROS", type="primary"):
+        st.success("🔄 Gerando arquivos... Pode demorar um pouco com muitos registros!")
         
         for idx, linha in df.iterrows():
             st.session_state.contador_memo += 1
             num_memo_atual = linha.get("Nº Memo", st.session_state.contador_memo)
             setor_nome = str(linha.get("SETOR NOTIFICADO", linha.get("Setor Notificado", ""))).strip()
+            
+            # Descobre o e-mail só pra te mostrar
             email_da_planilha = str(linha.get("EMAIL_SETOR", linha.get("Email Setor", ""))).strip()
-
             if email_da_planilha and "@" in email_da_planilha:
                 email_final = email_da_planilha
             else:
@@ -305,11 +271,17 @@ if arquivo_excel:
                 "destinatario": setor_nome
             }
 
-            st.subheader(f"➡️ Linha {idx+1} — Memorando Nº {num_memo_atual} → {setor_nome}")
-            
+            st.subheader(f"📄 Linha {idx+1} — Memo Nº {num_memo_atual} → {setor_nome}")
+            if email_final:
+                st.write(f"📧 Enviar para: **{email_final}**")
+            else:
+                st.warning("⚠️ E-mail não encontrado — preencher manualmente")
+
+            # GERA OS DOIS ARQUIVOS
             arq_memo = gerar_memorando_word(dados)
             arq_roteiro = gerar_roteiro_word(dados)
 
+            # BOTÕES DE DOWNLOAD
             dl1, dl2 = st.columns([1, 1])
             with dl1:
                 st.download_button(f"📄 Baixar Memorando", arq_memo,
@@ -317,31 +289,7 @@ if arquivo_excel:
             with dl2:
                 st.download_button(f"📋 Baixar Roteiro", arq_roteiro,
                     file_name=f"Roteiro_Tratativa_Notif_{dados['notif_num']}.docx", key=f"dr_{idx}")
-
-            arq_memo.seek(0)
-            arq_roteiro.seek(0)
-
-            if email_final and "@" in email_final:
-                corpo = f"""Boa Tarde/Pela Manhã,
-
-Segue em anexo o Memorando Nº {num_memo_atual}/{ANO} referente à Notificação Nº {dados['notif_num']}, acompanhado do Roteiro de Tratativa.
-
-Favor preencher e devolver no prazo de 15 dias.
-
-Atenciosamente,
-Ezequias S. Santos
-Agente Administrativo — NAQH & NSP"""
-
-                assunto = f"Notificação Nº {dados['notif_num']} | Memorando Nº {num_memo_atual}/{ANO}"
-
-                ok, msg = enviar_email(email_final, assunto, corpo, arq_memo, arq_roteiro, num_memo_atual, dados['notif_num'])
-                if ok:
-                    st.success(f"✅ ENVIADO para {email_final}")
-                else:
-                    st.error(f"❌ {msg}")
-            else:
-                st.info(f"📄 GERADO E BAIXADO → SEM E-MAIL PARA ENVIAR")
             
             st.divider()
 
-st.caption("👨‍💻 Criando Soluções Automatizadas — Ezequias S. Santos | Coluna EMAIL_SETOR tem PRIORIDADE | Gera TUDO, envia só quem tem e-mail!")
+st.caption("👨‍💻 Criando Soluções Automatizadas — Ezequias S. Santos | Gera Word → Você envia manualmente pelo e-mail ✅")
