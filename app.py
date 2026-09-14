@@ -1,6 +1,6 @@
 import streamlit as st
 from docx import Document
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from datetime import datetime
 import io
@@ -124,58 +124,68 @@ def tem_resposta(texto):
         return False
     return True
 
+# ✅ DETECÇÃO DO TURNO — RECONHECE NOITE, NOTURNO, ETC.
+def detectar_turno(texto):
+    if pd.isna(texto):
+        return "(   ) MANHÃ (   ) TARDE (   ) NOITE"
+    t = str(texto).strip().upper()
+    if re.search(r"MANH[ÃA]", t):
+        return "( X ) MANHÃ (   ) TARDE (   ) NOITE"
+    if re.search(r"TARDE", t):
+        return "(   ) MANHÃ ( X ) TARDE (   ) NOITE"
+    if re.search(r"NOITE|NOTURNO|NOT", t):
+        return "(   ) MANHÃ (   ) TARDE ( X ) NOITE"
+    return "(   ) MANHÃ (   ) TARDE (   ) NOITE"
+
 # ==================================================
-# 📄 GERA WORD NO PADRÃO OFICIAL — EXATAMENTE IGUAL!
+# 📄 WORD — SEM LINHAS VAZIAS EXTRAS! FORMATO PERFEITO!
 # ==================================================
 def gerar_memorando_word(dados):
     doc = Document()
 
-    # ✅ CABEÇALHO CENTRALIZADO — IGUAL AO MODELO
+    # ✅ CABEÇALHO — IGUAL AO MODELO
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = p.add_run("PREFEITURA DE SÃO LUÍS\nSECRETARIA MUNICIPAL DE SAÚDE\nHOSPITAL DA CIDADE DR. JACKSON LAGO")
     r.bold = True
     r.font.size = Pt(12)
+    p.space_after = Pt(0)
 
     # ✅ LINHA DO MEMORANDO
     p = doc.add_paragraph()
-    p.space_before = Pt(18)
+    p.space_before = Pt(6)
+    p.space_after = Pt(0)
     r = p.add_run(f"MEMO: Nº NSP {dados['memo_num']} / {ANO}")
     r.bold = True
 
-    doc.add_paragraph(f"DE: Coordenação do Núcleo de Segurança do Paciente do Hospital da Cidade Dr. Jackson Lago")
-    doc.add_paragraph(f"PARA: {dados['destinatario']}")
+    p = doc.add_paragraph("DE: Coordenação do Núcleo de Segurança do Paciente do Hospital da Cidade Dr. Jackson Lago")
+    p.space_after = Pt(0)
+    p = doc.add_paragraph(f"PARA: {dados['destinatario']}")
+    p.space_after = Pt(0)
 
-    # ✅ ASSUNTO + DATA ALINHADA À DIREITA NA MESMA ALTURA
+    # ✅ ASSUNTO + DATA ALINHADA À DIREITA — SEM ESPAÇO GIGANTE
     p_assunto = doc.add_paragraph()
+    p_assunto.space_after = Pt(0)
     r = p_assunto.add_run(f"ASSUNTO: Nº {dados['notif_num']}")
     r.bold = True
 
-    p_data = doc.paragraphs[-1]
-    p_data.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    p_data._element.get_or_add_pPr().clear()
     p_data = doc.add_paragraph()
     p_data.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    p_data.space_before = Pt(-22)
+    p_data.space_before = Pt(-18)  # Aproxima a data do assunto
+    p_data.space_after = Pt(6)
     p_data.add_run(f"São Luís, {dados['data_envio']}")
 
-    doc.add_paragraph()  # Espaço
-
-    # ✅ SAUDAÇÃO
-    doc.add_paragraph("Prezado (a), vimos através deste comunicar que recebemos uma notificação de incidente ocorrida neste setor. Segue abaixo as informações encaminhadas ao NSP:")
-    doc.add_paragraph()
+    # ✅ SAUDAÇÃO — SEM PULAR LINHAS
+    p = doc.add_paragraph("Prezado (a), vimos através deste comunicar que recebemos uma notificação de incidente ocorrida neste setor. Segue abaixo as informações encaminhadas ao NSP:")
+    p.space_before = Pt(6)
+    p.space_after = Pt(6)
 
     # ✅ TURNO
-    turno = dados['turno']
-    if turno == "MANHÃ":
-        turno_texto = "( X ) MANHÃ (   ) TARDE (   ) NOITE"
-    elif turno == "TARDE":
-        turno_texto = "(   ) MANHÃ ( X ) TARDE (   ) NOITE"
-    else:
-        turno_texto = "(   ) MANHÃ (   ) TARDE ( X ) NOITE"
+    turno_texto = detectar_turno(dados['turno'])
 
-    # ✅ INFORMAÇÕES — COM PONTO E TRAÇO SEM QUEBRA ERRADA
+    # ✅ INFORMAÇÕES — SEM LINHAS EXTRAS ENTRE OS ITENS
     p_info = doc.add_paragraph()
+    p_info.space_after = Pt(0)
     p_info.add_run(f"• DATA DA OCORRÊNCIA: {dados['data_ocorrencia']}\n")
     p_info.add_run(f"• DATA DA NOTIFICAÇÃO: {dados['data_notif']}\n")
     p_info.add_run(f"• TURNO QUE OCORREU INCIDENTE: {turno_texto}\n")
@@ -187,20 +197,20 @@ def gerar_memorando_word(dados):
     p_info.add_run(f"• LEITO: {dados['leito']}\n")
     p_info.add_run(f"• SETOR NOTIFICANTE: {dados['setor_origem']}")
 
-    doc.add_paragraph()
-    doc.add_paragraph(f"SUGESTÃO: {dados['sugestao']}")
-    doc.add_paragraph()
+    p = doc.add_paragraph(f"SUGESTÃO: {dados['sugestao']}")
+    p.space_before = Pt(6)
+    p.space_after = Pt(6)
 
-    # ✅ PARÁGRAFO FINAL
-    doc.add_paragraph("Conforme rotina institucional, o gestor tem o prazo de 15 dias para realizar comunicação do incidente com sua equipe e discutir barreiras para evitar a ocorrência de novos eventos.")
-    doc.add_paragraph()
+    p = doc.add_paragraph("Conforme rotina institucional, o gestor tem o prazo de 15 dias para realizar comunicação do incidente com sua equipe e discutir barreiras para evitar a ocorrência de novos eventos.")
+    p.space_after = Pt(18)
 
-    # ✅ ASSINATURA — SEM QUEBRAS ERRADAS
+    # ✅ ASSINATURA — SEM LINHAS VAZIAS
     doc.add_paragraph("Atenciosamente,")
-    doc.add_paragraph()
-    doc.add_paragraph("FABRÍCIA ROCHA")
-    doc.add_paragraph("Coordenadora")
-    doc.add_paragraph()
+    p = doc.add_paragraph()
+    p.space_before = Pt(18)
+    p = doc.add_paragraph("FABRÍCIA ROCHA")
+    p = doc.add_paragraph("Coordenadora")
+    p.space_after = Pt(18)
 
     # ✅ RODAPÉ
     doc.add_paragraph("Rua Tancredo Neves S/N – Santa Efigênia – CEP 65010-000, São Luís – MA")
@@ -274,7 +284,7 @@ with cab_dir:
     """, unsafe_allow_html=True)
 st.divider()
 
-st.info("ℹ️ ✅ WORD AJUSTADO! Data alinhada à direita, sem quebras erradas, formato igual ao modelo oficial!")
+st.info("ℹ️ ✅ ESPAÇAMENTO CORRIGIDO! Sem linhas vazias sobrando! Turno NOITE funciona! Data alinhada!")
 st.divider()
 
 st.subheader("📅 Configuração da Data de Envio")
@@ -294,8 +304,8 @@ if arquivo_excel:
     st.dataframe(df, use_container_width=True)
     st.divider()
 
-    if st.button("✅ GERAR TODOS — WORD NO PADRÃO OFICIAL", type="primary"):
-        st.success("🔄 Gerando... Word no formato oficial!")
+    if st.button("✅ GERAR TODOS — FORMATO PERFEITO", type="primary"):
+        st.success("🔄 Gerando... sem linhas vazias, formato idêntico ao modelo!")
         qtd_gerados = qtd_enviados = qtd_nao_enviar = 0
 
         for idx, linha in df.iterrows():
@@ -336,7 +346,7 @@ if arquivo_excel:
                     "data_ocorrencia": formatar_data(linha.get("DATA DA OCORRÊNCIA", "")),
                     "data_notif": formatar_data(linha.get("DATA DA NOTIFICAÇÃO", "")),
                     "data_envio": data_formatada,
-                    "turno": str(linha.get("TURNO QUE OCORREU INCIDENTE", "")).upper().strip(),
+                    "turno": str(linha.get("TURNO QUE OCORREU INCIDENTE", "")),
                     "local": str(linha.get("ONDE OCORREU INCIDENTE", "")),
                     "tipo": str(linha.get("TIPO DE INCIDENTE", "")),
                     "classificacao": str(linha.get("CLASSIFICAÇÃO DO INCIDENTE", "")),
@@ -348,6 +358,8 @@ if arquivo_excel:
                 }
 
                 st.subheader(f"📄 Nº {num_memo_atual} / {ANO} | {paciente} → {setor_nome}")
+                st.info(f"🔍 Turno lido: **{str(dados['turno']).strip()}** → {detectar_turno(dados['turno'])}")
+
                 if email_final:
                     st.success(f"📧 E-MAIL: `{email_final}`")
                 else:
@@ -386,4 +398,4 @@ Agente Administrativo - NAQH & NSP
 
         st.success(f"✅ CONCLUÍDO! Gerados: {qtd_gerados} | Já enviados: {qtd_enviados} | Não enviar: {qtd_nao_enviar}")
 
-st.caption("👨‍💻 Word no padrão oficial | Data alinhada à direita | Sem quebras erradas ✅")
+st.caption("👨‍💻 Sem linhas vazias | Data alinhada | Turno detecta NOITE | Espaçamento perfeito ✅")
