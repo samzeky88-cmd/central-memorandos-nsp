@@ -70,18 +70,19 @@ def encontrar_email(setor_nome):
             return lista_setores[chave]
     return ""
 
-# ------------------- LIMPAR NÚMEROS -------------------
+# ------------------- LIMPAR NÚMEROS — MAIS ROBUSTO -------------------
 def limpar_numero_memo(texto):
-    if pd.isna(texto) or not str(texto).strip():
+    """Extrai o número mesmo com espaços ou caracteres estranhos"""
+    if pd.isna(texto):
         return ""
     t = str(texto).strip()
-    m = re.search(r'(\d+)\s*/', t)
-    if m:
-        return m.group(1)
-    m2 = re.search(r'(\d+)', t)
-    if m2:
-        return m2.group(1)
-    return t
+    if not t or t.upper() == "NAN":
+        return ""
+    # Pega QUALQUER sequência de dígitos
+    digitos = re.findall(r'\d+', t)
+    if digitos:
+        return digitos[0]  # Pega o PRIMEIRO número
+    return ""
 
 def limpar_numero_notif(valor):
     if pd.isna(valor):
@@ -90,8 +91,10 @@ def limpar_numero_notif(valor):
         return str(int(valor))
     t = str(valor).strip()
     t = re.sub(r'\.0$', '', t)
-    t = re.sub(r'[^\d]', '', t)
-    return t
+    digitos = re.findall(r'\d+', t)
+    if digitos:
+        return digitos[0]
+    return ""
 
 # ------------------- FORMATAR DATA SEM HORÁRIO -------------------
 def formatar_data(valor):
@@ -120,31 +123,24 @@ MEMORANDOS = [
 
 # ✅ BASTA COLOCAR "-" NA COLUNA RESPOSTA = JÁ ENVIADO!
 def tem_resposta(texto):
-    """Retorna True se tem '-', conteúdo ou STATUS de enviado"""
     if pd.isna(texto):
         return False
     t = str(texto).strip().upper()
-    # ✅ BASTA UM TRAÇÃO "-" = JÁ ENVIADO!
     if t == "-" or t == "ENVIADO" or t == "SIM":
         return True
-    # Vazio = pendente
     if not t or t == "NAN" or t == "NÃO PREENCHER" or t == "NAO PREENCHER":
         return False
-    # Qualquer outro texto = considerado enviado
     return True
 
-# ------------------- GERAR MEMORANDO WORD — FORMATO OFICIAL -------------------
+# ------------------- GERAR MEMORANDO WORD -------------------
 def gerar_memorando_word(dados):
     doc = Document()
-
-    # ✅ CABEÇALHO EXATAMENTE COMO MODELO OFICIAL
     cab = doc.add_paragraph()
     cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = cab.add_run("PREFEITURA DE SÃO LUÍS SECRETARIA MUNICIPAL DE SAÚDE HOSPITAL DA CIDADE DR. JACKSON LAGO")
     run.bold = True
     run.font.size = Pt(12)
 
-    # ✅ LINHA DO MEMORANDO
     p_memo = doc.add_paragraph()
     p_memo.space_before = Pt(12)
     run = p_memo.add_run(f'MEMO: Nº NSP {dados["memo_num"]} / {ANO}')
@@ -154,24 +150,19 @@ def gerar_memorando_word(dados):
     doc.add_paragraph(f'DE: Coordenação do Núcleo de Segurança do Paciente do Hospital da Cidade Dr. Jackson Lago')
     doc.add_paragraph(f'PARA: {dados["destinatario"]}')
 
-    # ✅ ASSUNTO
     p_assun = doc.add_paragraph()
     run = p_assun.add_run(f'ASSUNTO: Nº {dados["notif_num"]}')
     run.bold = True
 
-    # ✅ DATA ALINHADA À DIREITA
     p_data = doc.add_paragraph()
     p_data.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     p_data.space_before = Pt(-16)
     p_data.add_run(f'São Luís, {dados["data_envio"]}')
 
     doc.add_paragraph()
-
-    # ✅ SAUDAÇÃO
     doc.add_paragraph("Prezado (a), vimos através deste comunicar que recebemos uma notificação de incidente ocorrida neste setor. Segue abaixo as informações encaminhadas ao NSP:")
     doc.add_paragraph()
 
-    # ✅ TURNO
     turno = dados['turno']
     if turno == "MANHÃ":
         turno_texto = "( X ) MANHÃ (   ) TARDE (   ) NOITE"
@@ -180,7 +171,6 @@ def gerar_memorando_word(dados):
     else:
         turno_texto = "(   ) MANHÃ (   ) TARDE ( X ) NOITE"
 
-    # ✅ INFORMAÇÕES
     p = doc.add_paragraph()
     p.add_run(f"• DATA DA OCORRÊNCIA: {dados['data_ocorrencia']}\n")
     p.add_run(f"• DATA DA NOTIFICAÇÃO: {dados['data_notif']}\n")
@@ -196,16 +186,13 @@ def gerar_memorando_word(dados):
     doc.add_paragraph()
     doc.add_paragraph(f"SUGESTÃO: {dados['sugestao']}")
     doc.add_paragraph()
-
     doc.add_paragraph("Conforme rotina institucional, o gestor tem o prazo de 15 dias para realizar comunicação do incidente com sua equipe e discutir barreiras para evitar a ocorrência de novos eventos.")
     doc.add_paragraph()
-
     doc.add_paragraph("Atenciosamente,")
     doc.add_paragraph()
     doc.add_paragraph("FABRÍCIA ROCHA")
     doc.add_paragraph("Coordenadora")
     doc.add_paragraph()
-
     doc.add_paragraph("Rua Tancredo Neves S/N – Santa Efigênia – CEP 65010-000, São Luís – MA")
     doc.add_paragraph("E-mail: nspsoc2@gmail.com")
     doc.add_paragraph("CNPJ: 02.930.277/0001-49")
@@ -215,7 +202,6 @@ def gerar_memorando_word(dados):
     buffer.seek(0)
     return buffer
 
-# ------------------- GERAR ROTEIRO WORD -------------------
 def gerar_roteiro_word(dados):
     doc = Document()
     cab = doc.add_paragraph()
@@ -280,8 +266,8 @@ with cab_dir:
     """, unsafe_allow_html=True)
 st.divider()
 
-# ✅ INSTRUÇÃO CLARA
-st.info("ℹ️ ✅ MOSTRA TODOS OS NÚMEROS! Pendentes = botão de baixar | Com '-' = tarja riscada (não some mais!)")
+# ✅ INSTRUÇÃO IMPORTANTE
+st.info("ℹ️ ✅ DIAGNÓSTICO ATIVADO! Vai mostrar cada linha lida e o motivo se não aparecer!")
 st.divider()
 
 st.subheader("📅 Configuração da Data de Envio")
@@ -294,55 +280,46 @@ arquivo_excel = st.file_uploader("Selecione o arquivo Excel", type=["xlsx"], lab
 
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel)
-    st.success(f"✅ Planilha carregada com {len(df)} registro(s)!")
-
-    tem_coluna_status = COLUNA_STATUS in df.columns
-    enviados = pd.Series([False]*len(df))
-    nao_enviar = pd.Series([False]*len(df))
-
-    if tem_coluna_status:
-        enviados = df[COLUNA_STATUS].str.contains("ENVIADO", case=False, na=False)
-        nao_enviar = df[COLUNA_STATUS].str.contains("NÃO ENVIAR|NAO ENVIAR", case=False, na=False)
-        pendentes = len(df) - enviados.sum() - nao_enviar.sum()
-        st.info(f"📋 {pendentes} PENDENTES | {enviados.sum()} ✅ ENVIADO | {nao_enviar.sum()} ⛔ NÃO ENVIAR")
+    st.success(f"✅ Planilha carregada com {len(df)} linha(s)!")
+    st.info(f"📋 Colunas encontradas: {', '.join(list(df.columns))}")
     st.divider()
 
-    st.subheader("📋 Pré-visualização dos dados")
+    st.subheader("👀 Pré-visualização da planilha completa")
     st.dataframe(df, use_container_width=True)
     st.divider()
 
-    if st.button("✅ GERAR TODOS — INCLUSIVE JÁ ENVIADOS", type="primary"):
-        st.success("🔄 Processando... MOSTRANDO TODOS OS NÚMEROS (ninguém mais some!)")
+    if st.button("✅ GERAR TODOS COM DIAGNÓSTICO", type="primary"):
+        st.success("🔄 Lendo TODAS as linhas...")
         qtd_gerados = 0
         qtd_enviados = 0
         qtd_nao_enviar = 0
+        linhas_nao_processadas = []
 
         for idx, linha in df.iterrows():
             status_linha = str(linha.get(COLUNA_STATUS, "")).strip().upper()
-            eh_enviado = "ENVIADO" in status_linha
             eh_nao_enviar = "NÃO ENVIAR" in status_linha or "NAO ENVIAR" in status_linha
-
             paciente = str(linha.get("PACIENTE", linha.get("Paciente", "Não informado"))).strip()
-            
+
             val1 = linha.get("Nº")
             val2 = linha.get("Nº Notificação")
             num_notif = limpar_numero_notif(val1 if pd.notna(val1) else val2)
 
-            # ✅ PERCORRE TODOS — NENHUM NÚMERO SOME!
+            encontrou_memo_na_linha = False
+
             for cfg in MEMORANDOS:
                 memo_texto = str(linha.get(cfg["memo"], "")).strip()
                 setor_nome = str(linha.get(cfg["setor"], "")).strip()
                 resposta_coluna = linha.get(cfg["resposta"])
 
-                # Se não tiver número ou setor → pula SÓ esse memo
-                if not memo_texto or memo_texto == "nan" or not setor_nome or setor_nome == "nan":
-                    continue
-
+                # ✅ DIAGNÓSTICO — mostra o que está lendo
                 num_memo_atual = limpar_numero_memo(memo_texto)
+
                 if not num_memo_atual:
+                    if memo_texto and memo_texto.upper() != "NAN":
+                        linhas_nao_processadas.append(f"Linha {idx+2}: '{memo_texto}' → número não extraído")
                     continue
 
-                # ✅ VERIFICAÇÃO DE STATUS
+                encontrou_memo_na_linha = True
                 memo_ja_enviado = tem_resposta(resposta_coluna)
 
                 # ⛔ NÃO ENVIAR
@@ -350,26 +327,26 @@ if arquivo_excel:
                     qtd_nao_enviar += 1
                     st.markdown(f"""
                     <div style="opacity:0.6; padding:12px; border:2px solid #ccc; border-radius:8px; background:#f8f8f8;">
-                        <h3 style="color:#888; margin:0;">📄 {memo_texto} | {paciente} → {setor_nome}</h3>
+                        <h3 style="color:#888; margin:0;">📄 Nº {num_memo_atual} | {paciente} → {setor_nome}</h3>
                         <p style="color:#888; font-weight:bold; margin:8px 0 0 0;">━━━━━━━━━━━━━━━ ⛔ NÃO ENVIAR ━━━━━━━━━━━━━━━━</p>
                     </div>
                     """, unsafe_allow_html=True)
                     st.divider()
                     continue
 
-                # ✅ JÁ ENVIADO → MOSTRA TARJA MAS NÃO SOME!
+                # ✅ JÁ ENVIADO → mostra com tarja
                 if memo_ja_enviado:
                     qtd_enviados += 1
                     st.markdown(f"""
                     <div style="opacity:0.5; padding:12px; border:2px solid #d4af37; border-radius:8px; background:#fff9e6;">
-                        <h3 style="text-decoration: line-through; color:#999; margin:0;">📄 {memo_texto} | {paciente} → {setor_nome}</h3>
+                        <h3 style="text-decoration: line-through; color:#999; margin:0;">📄 Nº {num_memo_atual} | {paciente} → {setor_nome}</h3>
                         <p style="color:#b8860b; font-weight:bold; margin:8px 0 0 0;">━━━━━━━━━━━━━━━━ ✅ JÁ ENVIADO ━━━━━━━━━━━━━━━━</p>
                     </div>
                     """, unsafe_allow_html=True)
                     st.divider()
                     continue
 
-                # ✅ PENDENTE → GERA COM BOTÃO DE BAIXAR
+                # ✅ PENDENTE → gera com botão
                 email_final = encontrar_email(setor_nome)
 
                 dados = {
@@ -390,7 +367,7 @@ if arquivo_excel:
                     "destinatario": setor_nome
                 }
 
-                st.subheader(f"📄 {memo_texto} | 👤 {paciente} → {setor_nome}")
+                st.subheader(f"📄 Nº {num_memo_atual} / {ANO} | 👤 {paciente} → {setor_nome}")
 
                 if email_final:
                     st.success(f"📧 **E-MAIL PRA COPIAR:** `{email_final}`")
@@ -430,11 +407,20 @@ Agente Administrativo - NAQH & NSP
                 st.divider()
                 qtd_gerados += 1
 
-        st.success(f"✅ **PROCESSO CONCLUÍDO! TODOS OS NÚMEROS EXIBIDOS!**")
+            if not encontrou_memo_na_linha:
+                linhas_nao_processadas.append(f"Linha {idx+2}: SEM número de memorando detectado")
+
+        # ✅ RESUMO FINAL
+        st.success(f"✅ **PROCESSO CONCLUÍDO!**")
         st.markdown(f"""
-        - 📋 **{qtd_gerados} memorandos gerados (PENDENTES — com botão de baixar)**
-        - ✅ **{qtd_enviados} já enviados** — tarja riscada, NÃO SUMIU!
+        - 📋 **{qtd_gerados} memorandos gerados (PENDENTES)**
+        - ✅ **{qtd_enviados} já enviados** — tarja riscada
         - ⛔ **{qtd_nao_enviar} marcados como NÃO ENVIAR**
         """)
 
-st.caption("👨‍💻 Nenhum número some mais! '-' = tarja riscada e continua visível ✅ Vazio = gera com botão ✅")
+        if linhas_nao_processadas:
+            st.warning("⚠️ **LINHAS NÃO PROCESSADAS — VERIFIQUE ABAIXO:**")
+            for aviso in linhas_nao_processadas:
+                st.write(f"  → {aviso}")
+
+st.caption("👨‍💻 Diagnóstico ativado: se faltar algum número, aparece o motivo! ✅")
