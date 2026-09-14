@@ -118,28 +118,35 @@ MEMORANDOS = [
     {"memo": "Nº Memo 05", "setor": "SETOR NOTIFICADO 05", "resposta": "Resposta MEMO 05"}
 ]
 
-# ------------------- VERIFICA SE JÁ TEM RESPOSTA -------------------
+# ✅ BASTA COLOCAR "-" NA COLUNA RESPOSTA = JÁ ENVIADO!
 def tem_resposta(texto):
-    """Retorna True se a coluna de resposta TEM conteúdo preenchido"""
+    """Retorna True se tem '-', conteúdo ou STATUS de enviado"""
     if pd.isna(texto):
         return False
     t = str(texto).strip().upper()
-    # Considera VAZIO se for: vazio, NAN, NAO PREENCHER, -
-    if not t or t == "NAN" or t == "NÃO PREENCHER" == "NAO PREENCHER" or t == "-":
+    # ✅ BASTA UM TRAÇÃO "-" = JÁ ENVIADO!
+    if t == "-" or t == "ENVIADO" or t == "SIM":
+        return True
+    # Vazio = pendente
+    if not t or t == "NAN" or t == "NÃO PREENCHER" or t == "NAO PREENCHER":
         return False
-    return True  # Tem resposta preenchida → NÃO gera
+    # Qualquer outro texto = considerado enviado
+    return True
 
-# ------------------- GERAR MEMORANDO WORD -------------------
+# ------------------- GERAR MEMORANDO WORD — FORMATO OFICIAL -------------------
 def gerar_memorando_word(dados):
     doc = Document()
+
+    # ✅ CABEÇALHO EXATAMENTE COMO MODELO OFICIAL
     cab = doc.add_paragraph()
     cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = cab.add_run("PREFEITURA DE SÃO LUÍS SECRETARIA MUNICIPAL DE SAÚDE HOSPITAL DA CIDADE DR. JACKSON LAGO")
     run.bold = True
     run.font.size = Pt(12)
-    doc.add_paragraph()
 
+    # ✅ LINHA DO MEMORANDO
     p_memo = doc.add_paragraph()
+    p_memo.space_before = Pt(12)
     run = p_memo.add_run(f'MEMO: Nº NSP {dados["memo_num"]} / {ANO}')
     run.bold = True
     run.font.size = Pt(12)
@@ -147,17 +154,24 @@ def gerar_memorando_word(dados):
     doc.add_paragraph(f'DE: Coordenação do Núcleo de Segurança do Paciente do Hospital da Cidade Dr. Jackson Lago')
     doc.add_paragraph(f'PARA: {dados["destinatario"]}')
 
+    # ✅ ASSUNTO
     p_assun = doc.add_paragraph()
     run = p_assun.add_run(f'ASSUNTO: Nº {dados["notif_num"]}')
     run.bold = True
 
+    # ✅ DATA ALINHADA À DIREITA
     p_data = doc.add_paragraph()
     p_data.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p_data.space_before = Pt(-16)
     p_data.add_run(f'São Luís, {dados["data_envio"]}')
+
     doc.add_paragraph()
 
+    # ✅ SAUDAÇÃO
     doc.add_paragraph("Prezado (a), vimos através deste comunicar que recebemos uma notificação de incidente ocorrida neste setor. Segue abaixo as informações encaminhadas ao NSP:")
+    doc.add_paragraph()
 
+    # ✅ TURNO
     turno = dados['turno']
     if turno == "MANHÃ":
         turno_texto = "( X ) MANHÃ (   ) TARDE (   ) NOITE"
@@ -166,6 +180,7 @@ def gerar_memorando_word(dados):
     else:
         turno_texto = "(   ) MANHÃ (   ) TARDE ( X ) NOITE"
 
+    # ✅ INFORMAÇÕES
     p = doc.add_paragraph()
     p.add_run(f"• DATA DA OCORRÊNCIA: {dados['data_ocorrencia']}\n")
     p.add_run(f"• DATA DA NOTIFICAÇÃO: {dados['data_notif']}\n")
@@ -176,12 +191,22 @@ def gerar_memorando_word(dados):
     p.add_run(f"• DESCRIÇÃO DA NOTIFICAÇÃO: {dados['descricao']}\n")
     p.add_run(f"• PACIENTE: {dados['paciente']}\n")
     p.add_run(f"• LEITO: {dados['leito']}\n")
-    p.add_run(f"• SETOR NOTIFICANTE: {dados['setor_origem']}\n\n")
-    p.add_run(f"SUGESTÃO: {dados['sugestao']}")
+    p.add_run(f"• SETOR NOTIFICANTE: {dados['setor_origem']}")
+
+    doc.add_paragraph()
+    doc.add_paragraph(f"SUGESTÃO: {dados['sugestao']}")
+    doc.add_paragraph()
 
     doc.add_paragraph("Conforme rotina institucional, o gestor tem o prazo de 15 dias para realizar comunicação do incidente com sua equipe e discutir barreiras para evitar a ocorrência de novos eventos.")
-    doc.add_paragraph("\nAtenciosamente,\n\nFABRÍCIA ROCHA Coordenadora")
-    doc.add_paragraph("\nRua Tancredo Neves S/N – Santa Efigênia – CEP 65010-000, São Luís – MA")
+    doc.add_paragraph()
+
+    doc.add_paragraph("Atenciosamente,")
+    doc.add_paragraph()
+    doc.add_paragraph("FABRÍCIA ROCHA")
+    doc.add_paragraph("Coordenadora")
+    doc.add_paragraph()
+
+    doc.add_paragraph("Rua Tancredo Neves S/N – Santa Efigênia – CEP 65010-000, São Luís – MA")
     doc.add_paragraph("E-mail: nspsoc2@gmail.com")
     doc.add_paragraph("CNPJ: 02.930.277/0001-49")
 
@@ -255,7 +280,8 @@ with cab_dir:
     """, unsafe_allow_html=True)
 st.divider()
 
-st.info("ℹ️ CORRIGIDO: Mesmo paciente → gera TODOS os memorandos para cada setor! Resposta vazia = gera ✅")
+# ✅ INSTRUÇÃO CLARA
+st.info("ℹ️ ✅ BASTA COLOCAR UM TRAÇÃO '-' na coluna Resposta = JÁ ENVIADO! Vazio = gera normalmente! Sem pular números!")
 st.divider()
 
 st.subheader("📅 Configuração da Data de Envio")
@@ -302,17 +328,17 @@ if arquivo_excel:
             val2 = linha.get("Nº Notificação")
             num_notif = limpar_numero_notif(val1 if pd.notna(val1) else val2)
 
-            # ✅ PERCORRE CADA MEMORANDO — INDEPENDENTE DOS OUTROS!
+            # ✅ PERCORRE TODOS OS MEMORANDOS — SEM PULAR NÚMERO
             for cfg in MEMORANDOS:
                 memo_texto = str(linha.get(cfg["memo"], "")).strip()
                 setor_nome = str(linha.get(cfg["setor"], "")).strip()
                 resposta_coluna = linha.get(cfg["resposta"])
 
-                # Se NÃO tiver número do memo OU NÃO tiver setor → pula SÓ esse memo
+                # Se não tiver número ou setor → pula SÓ esse memo
                 if not memo_texto or memo_texto == "nan" or not setor_nome or setor_nome == "nan":
                     continue
 
-                # ✅ SÓ pula esse memo ESPECÍFICO se RESPOSTA estiver PREENCHIDA
+                # ✅ BASTA TER "-" = JÁ ENVIADO!
                 if tem_resposta(resposta_coluna):
                     qtd_enviados += 1
                     st.markdown(f"""
@@ -328,7 +354,7 @@ if arquivo_excel:
                 if not num_memo_atual:
                     continue
 
-                # ⛔ Status geral = NÃO ENVIAR → marca todos os memos da linha
+                # ⛔ NÃO ENVIAR
                 if eh_nao_enviar:
                     qtd_nao_enviar += 1
                     st.markdown(f"""
@@ -408,4 +434,4 @@ Agente Administrativo - NAQH & NSP
         - ⛔ **{qtd_nao_enviar} marcados como NÃO ENVIAR**
         """)
 
-st.caption("👨‍💻 Mesmo paciente → gera 1 memorando POR SETOR! Resposta vazia = gera ✅ | Resposta preenchida = tarja ✅")
+st.caption("👨‍💻 Coluna Resposta: Vazio = GERA | '-' = JÁ ENVIADO | Sem pular números ✅")
