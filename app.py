@@ -118,6 +118,17 @@ MEMORANDOS = [
     {"memo": "Nº Memo 05", "setor": "SETOR NOTIFICADO 05", "resposta": "Resposta MEMO 05"}
 ]
 
+# ------------------- VERIFICA SE JÁ TEM RESPOSTA -------------------
+def tem_resposta(texto):
+    """Retorna True se a coluna de resposta TEM conteúdo preenchido"""
+    if pd.isna(texto):
+        return False
+    t = str(texto).strip().upper()
+    # Considera VAZIO se for: vazio, NAN, NAO PREENCHER, -
+    if not t or t == "NAN" or t == "NÃO PREENCHER" == "NAO PREENCHER" or t == "-":
+        return False
+    return True  # Tem resposta preenchida → NÃO gera
+
 # ------------------- GERAR MEMORANDO WORD -------------------
 def gerar_memorando_word(dados):
     doc = Document()
@@ -244,7 +255,7 @@ with cab_dir:
     """, unsafe_allow_html=True)
 st.divider()
 
-st.info("ℹ️ ENVIADO → tarja riscada + 'JÁ ENVIADO' | PENDENTE → gera download | NÃO ENVIAR → apenas marcado ✅")
+st.info("ℹ️ CORRIGIDO: Mesmo paciente → gera TODOS os memorandos para cada setor! Resposta vazia = gera ✅")
 st.divider()
 
 st.subheader("📅 Configuração da Data de Envio")
@@ -291,24 +302,18 @@ if arquivo_excel:
             val2 = linha.get("Nº Notificação")
             num_notif = limpar_numero_notif(val1 if pd.notna(val1) else val2)
 
+            # ✅ PERCORRE CADA MEMORANDO — INDEPENDENTE DOS OUTROS!
             for cfg in MEMORANDOS:
                 memo_texto = str(linha.get(cfg["memo"], "")).strip()
                 setor_nome = str(linha.get(cfg["setor"], "")).strip()
-                resp_memo = str(linha.get(cfg["resposta"], "")).strip().upper()
+                resposta_coluna = linha.get(cfg["resposta"])
 
-                if not memo_texto or memo_texto == "nan":
-                    continue
-                if resp_memo and resp_memo != "NAN":
-                    eh_enviado = True
-
-                num_memo_atual = limpar_numero_memo(memo_texto)
-                if not num_memo_atual:
+                # Se NÃO tiver número do memo OU NÃO tiver setor → pula SÓ esse memo
+                if not memo_texto or memo_texto == "nan" or not setor_nome or setor_nome == "nan":
                     continue
 
-                # ==================================================
-                # ✅ SE JÁ ENVIADO → TARJA RISCADA + DESCRIÇÃO
-                # ==================================================
-                if eh_enviado:
+                # ✅ SÓ pula esse memo ESPECÍFICO se RESPOSTA estiver PREENCHIDA
+                if tem_resposta(resposta_coluna):
                     qtd_enviados += 1
                     st.markdown(f"""
                     <div style="opacity:0.5; padding:12px; border:2px solid #d4af37; border-radius:8px; background:#fff9e6;">
@@ -319,7 +324,11 @@ if arquivo_excel:
                     st.divider()
                     continue
 
-                # ⛔ SE NÃO ENVIAR → MARCADO SEM DOWNLOAD
+                num_memo_atual = limpar_numero_memo(memo_texto)
+                if not num_memo_atual:
+                    continue
+
+                # ⛔ Status geral = NÃO ENVIAR → marca todos os memos da linha
                 if eh_nao_enviar:
                     qtd_nao_enviar += 1
                     st.markdown(f"""
@@ -331,7 +340,7 @@ if arquivo_excel:
                     st.divider()
                     continue
 
-                # ✅ PENDENTE → GERA NORMALMENTE
+                # ✅ PENDENTE → GERA!
                 email_final = encontrar_email(setor_nome)
 
                 dados = {
@@ -399,4 +408,4 @@ Agente Administrativo - NAQH & NSP
         - ⛔ **{qtd_nao_enviar} marcados como NÃO ENVIAR**
         """)
 
-st.caption("👨‍💻 ENVIADO → tarja dourada riscada | PENDENTE → disponível para download ✅")
+st.caption("👨‍💻 Mesmo paciente → gera 1 memorando POR SETOR! Resposta vazia = gera ✅ | Resposta preenchida = tarja ✅")
