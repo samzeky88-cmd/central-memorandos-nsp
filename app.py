@@ -54,17 +54,17 @@ lista_setores = {
     "EQUIPE MULTIPROFISSIONAL": "emtn.hcid@gmail.com"
 }
 
-# ------------------- ✅ FUNÇÃO CORRIGIDA DEFINITIVAMENTE -------------------
+# ✅ FUNÇÃO CORRIGIDA — NÃO DÁ MAIS ERRO
 def encontrar_email(setor_nome):
     if pd.isna(setor_nome) or not str(setor_nome).strip():
         return ""
     nome_limpo = str(setor_nome).strip().upper()
     if nome_limpo in lista_setores:
         return lista_setores[nome_limpo]
-    for chave, email in lista_setores.items():
-        chave_limpa = chave.upper()  # ✅ PRIMEIRO CRIA
-        if nome_limpo in chave_limpa or chave_limpa in nome_limpa:  # ✅ DEPOIS USA
-            return email
+    for chave in lista_setores:
+        chave_upper = chave.upper()
+        if nome_limpo in chave_upper or chave_upper in nome_limpo:
+            return lista_setores[chave]
     return ""
 
 # ------------------- CONTADOR -------------------
