@@ -7,14 +7,18 @@ from docx import Document
 import time
 
 
-# --- FUNÇÃO DE DATA (DEFINIÇÃO ANTES DO USO) ---
+# --- FUNÇÃO DE DATA ---
 def obter_data_por_extenso(dt):
-    """Gera a data selecionada por extenso em português brasileiro"""
     meses = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
+
+
+def formatar_data_br_curta(dt):
+    """Retorna data no formato DD/MM/AAAA"""
+    return dt.strftime("%d/%m/%Y")
 
 
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
@@ -53,9 +57,10 @@ st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago �
 fuso_brasilia = timezone(timedelta(hours=-3))
 data_hoje = datetime.now(fuso_brasilia)
 data_extenso = obter_data_por_extenso(data_hoje)
+data_curta = formatar_data_br_curta(data_hoje)  # DD/MM/AAAA para o Word
 
 st.markdown("### 📅 Data de Envio (atualizada em tempo real)")
-st.info(f"📌 Data: **{data_extenso}**")
+st.info(f"📌 Data: **{data_extenso}**  |  No formato do documento: **{data_curta}**")
 data_selecionada = data_hoje
 
 
@@ -63,9 +68,8 @@ arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)
 caminho_modelo = "modelo_memorando.docx"
 
 
-# --- DEMAIS FUNÇÕES ---
+# --- SUBSTITUIÇÃO DE TEXTO NO WORD ---
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
-    """Substitui o texto alterando apenas os 'runs' para proteger imagens e cabeçalhos."""
     for paragrafo in doc.paragraphs:
         for tag, valor in dicionario_tags.items():
             if tag in paragrafo.text:
@@ -85,7 +89,6 @@ def substituir_texto_protegendo_logos(doc, dicionario_tags):
 
 
 def formatar_data_br(valor):
-    """Garante que as datas sejam exibidas no formato brasileiro DD/MM/AAAA"""
     try:
         if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
             return ""
@@ -95,7 +98,6 @@ def formatar_data_br(valor):
 
 
 def limpar_numero_float(valor):
-    """Remove o .0 de números inteiros vindos do Excel (ex: 886.0 vira 886)"""
     if pd.isna(valor) or str(valor).strip().lower() == "nan":
         return ""
     try:
@@ -110,14 +112,13 @@ def limpar_numero_float(valor):
 
 
 def tratar_str_limpa(valor):
-    """Evita que campos vazios ou nulos exibam a palavra 'nan'"""
     if pd.isna(valor) or str(valor).strip().lower() == "nan" or str(valor).strip().lower() == "none":
         return ""
     return str(valor).strip()
 
 
 @st.fragment
-def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
+def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio, data_curta_envio):
     num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
         return
@@ -160,6 +161,7 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     if setor_notificante_bruto == "":
         setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE"
 
+    # ✅ AQUI ESTÁ A CORREÇÃO: data_curta_envio = HOJE, sempre atualizada
     dados_memorando = {
         "{{numero_memorando}}": num_memo_cru,
         "{{gestor}}": gestor_destinatario,
@@ -178,16 +180,12 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
         "{{m}}": marca_manha,
         "{{t}}": marca_tarde,
         "{{n}}": marca_noite,
-        "{{data_envio}}": data_extenso_envio
+        "{{data_envio}}": data_curta_envio,       # ✅ DD/MM/AAAA — HOJE
+        "{{data_envio_extenso}}": data_extenso_envio  # ✅ Por extenso — HOJE
     }
 
     hora_atual = datetime.now(fuso_brasilia).hour
-    if hora_atual < 12:
-        saudacao = "Bom Dia Prezados"
-    elif hora_atual < 18:
-        saudacao = "Boa Tarde Prezados"
-    else:
-        saudacao = "Boa Noite Prezados"
+    saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados" if hora_atual < 18 else "Boa Noite Prezados"
 
     corpo_email = (
         f"{saudacao},\n\n"
@@ -211,7 +209,6 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
             st.markdown(f"~~{nome_do_paciente}~~ 🟢 *(Já Enviado)*")
         else:
             st.markdown(f"**🔹 {nome_do_paciente}**")
-
         if email_destino:
             st.caption(f"📧 Destinatário: {email_destino}")
 
@@ -253,10 +250,10 @@ if arquivo_excel:
         df = df.iloc[2:]
 
     data_extenso_envio = obter_data_por_extenso(data_selecionada)
+    data_curta_envio = formatar_data_br_curta(data_selecionada)
     num_colunas = len(df.columns)
 
     df = df.dropna(subset=[df.columns[0]])
-
     if num_colunas > 9:
         df = df.dropna(subset=[df.columns[9]])
         df = df[df[df.columns[9]].astype(str).str.strip() != ""]
@@ -264,6 +261,6 @@ if arquivo_excel:
     st.success(f"✅ Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
 
     for index, line in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio)
+        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio, data_curta_envio)
 else:
     st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
