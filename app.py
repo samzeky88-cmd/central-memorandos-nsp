@@ -21,13 +21,13 @@ st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout=
 
 
 # --- CABEÇALHO SUPERIOR DIREITO ---
-_, _, cabecalho_dir = st.columns([1, 1, 1.3])
+_, _, cabecalho_dir = st.columns([1, 1, 1.4])
 with cabecalho_dir:
-    st.markdown("### Desenvolvendo soluções")
-    st.caption("Ezequias S. Santoz • Agente Administrativo")
+    st.markdown("### 🚀 Desenvolvendo soluções automatizadas")
+    st.caption("Ezequias S. Santos 💻 • Agente Administrativo")
     st.markdown(
         "<p style='font-size: 13px; font-style: italic; color: #cccccc; margin-top: 8px;'>"
-        "“Consagre ao Senhor tudo o que você faz, e os seus planos serão bem-sucedidos” — Prov. 16:3"
+        "📖 “Consagre ao Senhor tudo o que você faz, e os seus planos serão bem-sucedidos” — Prov. 16:3 🙏"
         "</p>",
         unsafe_allow_html=True
     )
@@ -46,7 +46,7 @@ for letra in texto_animado:
 espaco.markdown(f"#### {texto_animado}")
 
 
-st.title("📝 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
+st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago 🏥")
 
 
 # --- DATA EM TEMPO REAL (Brasília) ---
