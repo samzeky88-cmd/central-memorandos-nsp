@@ -2,25 +2,40 @@ import os
 import pandas as pd
 import streamlit as st
 import io
-import urllib.parse
 from datetime import datetime, timedelta, timezone
 from docx import Document
 import time
 
 
+# --- FUNÇÃO DE DATA (DEFINIÇÃO ANTES DO USO) ---
+def obter_data_por_extenso(dt):
+    """Gera a data selecionada por extenso em português brasileiro"""
+    meses = {
+        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+    }
+    return f"{dt.day} de {meses[dt.month]} de {dt.year}"
+
+
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 
 
-# --- Cabeçalho personalizado ---
-_, _, cabecalho_dir = st.columns([1, 1, 1.2])
+# --- CABEÇALHO SUPERIOR DIREITO ---
+_, _, cabecalho_dir = st.columns([1, 1, 1.3])
 with cabecalho_dir:
     st.markdown("### Desenvolvendo soluções")
-    st.caption("Ezequias S. Santoz\nAgente Administrativo")
+    st.caption("Ezequias S. Santoz • Agente Administrativo")
+    st.markdown(
+        "<p style='font-size: 13px; font-style: italic; color: #cccccc; margin-top: 8px;'>"
+        "“Consagre ao Senhor tudo o que você faz, e os seus planos serão bem-sucedidos” — Prov. 16:3"
+        "</p>",
+        unsafe_allow_html=True
+    )
 
 st.markdown("---")
 
 
-# --- Efeito de digitação ---
+# --- EFEITO DE DIGITAÇÃO ---
 texto_animado = "📝 Gerando memorandos com precisão e agilidade..."
 espaco = st.empty()
 texto_exibido = ""
@@ -30,21 +45,25 @@ for letra in texto_animado:
     time.sleep(0.05)
 espaco.markdown(f"#### {texto_animado}")
 
+
 st.title("📝 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 
 
-# --- Data em tempo real (Brasília) ---
+# --- DATA EM TEMPO REAL (Brasília) ---
 fuso_brasilia = timezone(timedelta(hours=-3))
 data_hoje = datetime.now(fuso_brasilia)
+data_extenso = obter_data_por_extenso(data_hoje)
+
 st.markdown("### 📅 Data de Envio (atualizada em tempo real)")
-st.info(f"📌 Data: **{obter_data_por_extenso(data_hoje)}**")
-data_selecionada = data_hoje  # Usa a data de hoje automaticamente
+st.info(f"📌 Data: **{data_extenso}**")
+data_selecionada = data_hoje
 
 
 arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
 caminho_modelo = "modelo_memorando.docx"
 
 
+# --- DEMAIS FUNÇÕES ---
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
     """Substitui o texto alterando apenas os 'runs' para proteger imagens e cabeçalhos."""
     for paragrafo in doc.paragraphs:
@@ -95,15 +114,6 @@ def tratar_str_limpa(valor):
     if pd.isna(valor) or str(valor).strip().lower() == "nan" or str(valor).strip().lower() == "none":
         return ""
     return str(valor).strip()
-
-
-def obter_data_por_extenso(dt):
-    """Gera a data selecionada por extenso em português brasileiro"""
-    meses = {
-        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-    }
-    return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
 
 @st.fragment
@@ -172,7 +182,12 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
     }
 
     hora_atual = datetime.now(fuso_brasilia).hour
-    saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados" if hora_atual < 18 else "Boa Noite Prezados"
+    if hora_atual < 12:
+        saudacao = "Bom Dia Prezados"
+    elif hora_atual < 18:
+        saudacao = "Boa Tarde Prezados"
+    else:
+        saudacao = "Boa Noite Prezados"
 
     corpo_email = (
         f"{saudacao},\n\n"
@@ -252,14 +267,3 @@ if arquivo_excel:
         renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio)
 else:
     st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
-
-
-# --- Frase bíblica no rodapé ---
-st.markdown("")
-st.markdown("---")
-st.markdown(
-    "<p style='text-align: center; font-style: italic;'>"
-    "“Consagre ao Senhor tudo o que você faz, e os seus planos serão bem-sucedidos” — Provérbios 16:3"
-    "</p>",
-    unsafe_allow_html=True
-)
