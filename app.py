@@ -312,7 +312,7 @@ if arquivo_excel:
                     st.write(f"💡 Sugestão: {sugestao}")
                     st.write(f"📧 E-mail para envio: {email_destino}")
                     
-                    corpo_email = f"""
+                                       corpo_email = f"""
 {saudacao} Prezado(a),
 
 Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
@@ -328,7 +328,8 @@ Agente Administrativo — NAQH / NSP
 Núcleo de Segurança do Paciente
 nspsoc2@gmail.com
                     """
-                        with st.expander("Texto do E-mail"):
+
+                    with st.expander("Texto do E-mail"):
                         st.text(corpo_email.strip())
 
                     dados_docx = {
@@ -352,13 +353,4 @@ nspsoc2@gmail.com
                         "{{sugestao}}": sugestao,
                     }
 
-                    arquivo_pronto = gerar_docx(dados_docx)
-                    if arquivo_pronto:
-                        st.download_button(
-                            label="📄 Baixar Memorando",
-                            data=arquivo_pronto,
-                            file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            key=f"download_pend_{num_notificacao}_{num_memorando}_{idx}"
-                        )
 
