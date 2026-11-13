@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Final: Todos visíveis + Riscado Enviado + Contagem Correta
+# Versão Final: Todos visíveis + Riscado + Contagem Correta de Memorandos
 # =================================================================
 
 import os
@@ -221,7 +221,7 @@ def gerar_docx(dados):
         return None
 
 # =================================================================
-# 📊 COLETAR TODOS OS MEMORANDOS
+# 📊 COLETAR TODOS OS MEMORANDOS — CONTAGEM REAL
 # =================================================================
 def coletar_todos_memorandos(df):
     todos_memorandos = []
@@ -229,6 +229,7 @@ def coletar_todos_memorandos(df):
         status = tratar_texto(linha.iloc[1]) if len(linha) > 1 else ""
         dt_notif = formatar_data_br(linha.iloc[3]) if len(linha) > 3 else ""
         
+        # 4 blocos por linha = até 4 memorandos por registro
         for g_col, s_col, m_col in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
             num_memo = limpar_numero(linha.iloc[m_col]) if m_col < len(linha) else ""
             setor = tratar_texto(linha.iloc[s_col]) if s_col < len(linha) else ""
@@ -264,7 +265,7 @@ with aba_processar:
             df = pd.read_excel(arquivo_excel, engine="openpyxl")
             df_memos = coletar_todos_memorandos(df)
             
-            # ✅ CONTAGEM — APENAS DE MEMORANDOS, NÃO DE LINHAS
+            # ✅ CONTAGEM CORRETA — APENAS DE MEMORANDOS VÁLIDOS
             total_memorandos = len(df_memos)
             enviados = len(df_memos[df_memos["status"] == "ENVIADO"])
             pendentes = total_memorandos - enviados
@@ -279,7 +280,7 @@ with aba_processar:
             
             data_extenso = data_por_extenso(data_selecionada)
             
-            # Processar TODAS as linhas — enviados e pendentes
+            # Processar TODAS as linhas
             for idx, linha in df.iterrows():
                 num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
                 if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
@@ -320,10 +321,14 @@ with aba_processar:
                     st.subheader(f"📋 Notificação {num_notif} — {nome_paciente}")
                 
                 for b in blocos:
-                    if b["status"] == "ENVIADO":
-                        st.markdown(f"~~📄 Memorando Nº {b['num_memo']} — {b['setor']}~~ ✅ **ENVIADO**")
+                    memo_nome = b['num_memo']
+                    memo_setor = b['setor']
+                    memo_status = b['status']
+                    
+                    if memo_status == "ENVIADO":
+                        st.markdown(f"~~📄 Memorando Nº {memo_nome} — {memo_setor}~~ ✅ **ENVIADO**")
                     else:
-                        with st.expander(f"📄 Memorando Nº {b['num_memo']} — {b['setor']} — ⏳ PENDENTE"):
+                        with st.expander(f"📄 Memorando Nº {memo_nome} — {memo_setor} — ⏳ PENDENTE"):
                             st.write(f"**Gestor:** {b['gestor']}")
                             if b['email']:
                                 st.info(f"📧 E-mail: {b['email']}")
@@ -332,7 +337,5 @@ with aba_processar:
                             
                             docx_bytes = gerar_docx(b['dados_docx'])
                             if docx_bytes:
-                                st.download_button(
-                                    label="📥 Baixar Memorando (DOCX)",
-                                    data=docx_bytes,
-                                    file_name=f"MEMORANDO_{b['num_memo']}_NOTIF_{num_notif}.docx
+                                # ✅ STRING FECHADA CORRETAMENTE AQUI
+                                nome_arquivo
