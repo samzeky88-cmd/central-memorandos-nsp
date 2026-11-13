@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Corrigida: Acesso por Posição + 4 Blocos por Linha
+# Versão: Filtra "ENVIADO" + 4 Blocos por Linha
 # =================================================================
 
 import os
@@ -152,7 +152,6 @@ def processar_bloco(linha, bloco_nome, idx, nome_paciente, data_extenso,
                     dt_ocorr, dt_notif, local, tipo,
                     classificacao, desc, leito, setor_notificante, sugestao, turno_bruto):
     
-    # ✅ CORRIGIDO: Usar .iloc[] para acessar por POSIÇÃO
     gestor = tratar_texto(linha.iloc[col_gestor]) if col_gestor < len(linha) else ""
     setor_destino = tratar_texto(linha.iloc[col_setor]) if col_setor < len(linha) else ""
     num_memo = limpar_numero(linha.iloc[col_memo]) if col_memo < len(linha) else ""
@@ -223,20 +222,36 @@ def gerar_docx(dados, nome_arquivo_base):
         return None
 
 # =================================================================
-# 🚀 EXECUÇÃO PRINCIPAL
+# 🚀 EXECUÇÃO PRINCIPAL — COM FILTRO DE "ENVIADO"
 # =================================================================
 if arquivo_excel:
     try:
         df = pd.read_excel(arquivo_excel, engine="openpyxl")
-        st.success(f"✅ Planilha carregada — {len(df)} registro(s) encontrado(s)")
+        
+        # 📊 CONTAGENS INICIAIS
+        total_linhas = len(df)
+        st.subheader("📊 Resumo da Planilha")
+        st.write(f"**Total de registros:** {total_linhas}")
+        
+        # ✅ FILTRAR LINHAS QUE NÃO ESTÃO COMO "ENVIADO"
+        # Coluna A = Nº, Coluna B = STATUS (posição 1)
+        status_col_index = 1  # Coluna B
+        
+        # Criar máscara: manter apenas os que NÃO são "ENVIADO"
+        filtro_nao_enviado = df.iloc[:, status_col_index].apply(
+            lambda x: str(x).strip().upper() != "ENVIADO"
+        )
+        
+        df_filtrado = df[filtro_nao_enviado].reset_index(drop=True)
+        qtd_enviado = total_linhas - len(df_filtrado)
+        
+        st.info(f"✅ **{qtd_enviado}** registro(s) já marcado(s) como ENVIADO — ignorado(s)")
+        st.success(f"📋 **{len(df_filtrado)}** registro(s) pendente(s) para processar")
+        
         data_extenso = data_por_extenso(data_selecionada)
         
-        # Mostrar colunas para conferência
-        with st.expander("🔍 Ver colunas da planilha"):
-            for i, nome in enumerate(df.columns):
-                st.write(f"Posição {i} → Coluna: {nome}")
-        
-        for idx, linha in df.iterrows():
+        # Processar SOMENTE os pendentes (não enviados)
+        for idx, linha in df_filtrado.iterrows():
             num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
             if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
                 continue
@@ -256,7 +271,7 @@ if arquivo_excel:
             sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
             turno_bruto = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
             
-            # 🧩 PROCESSAR OS 4 BLOCOS — com .iloc[] corrigido
+            # 🧩 PROCESSAR OS 4 BLOCOS
             bloco1 = processar_bloco(
                 linha, "Memorando 01", idx, nome_paciente, data_extenso,
                 13, 14, 15,
