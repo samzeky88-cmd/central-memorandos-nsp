@@ -1,5 +1,6 @@
 # =================================================================
 # GERADOR DE MEMORANDOS — HOSPITAL DA CIDADE DR. JACKSON LAGO
+# VERSÃO FINAL: E-mails corretos + Marcação de Enviado na tela
 # =================================================================
 
 import pandas as pd
@@ -43,7 +44,9 @@ def data_por_extenso(dt):
              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     return f"{dt.day} de {meses[dt.month-1]} de {dt.year}"
 
-# ✅ E-MAIL — Baseado EXCLUSIVAMENTE no SETOR NOTIFICADO
+# =================================================================
+# 📧 E-MAILS — Lista oficial do Hospital da Cidade
+# =================================================================
 def buscar_email_setor(setor_notificado):
     if not setor_notificado or str(setor_notificado).strip() == "":
         return "nspsoc2@gmail.com"
@@ -70,6 +73,9 @@ def buscar_email_setor(setor_notificado):
         "TERAPIA OCUPACIONAL": "terapiaocupacional.hcid@gmail.com",
         "SERVIÇO SOCIAL": "servicosocialhcid@gmail.com",
         "NUTRIÇÃO": "nutricaohospitaldacidade@gmail.com",
+        "GESTOR DE ENFERMAGEM": "enfermagem.hcid@gmail.com",
+        "GESTOR DE GERÊNCIA DE ENFERMAGEM": "gerenciaenfermagem.hcid@gmail.com",
+        "NIR (NÚCLEO INTERNO DE REGULAÇÃO)": "coordenanirs2@gmail.com",
     }
     
     for chave, email in emails.items():
@@ -78,7 +84,9 @@ def buscar_email_setor(setor_notificado):
     
     return "nspsoc2@gmail.com"
 
-# ✅ GESTOR — Baseado EXCLUSIVAMENTE no SETOR NOTIFICADO
+# =================================================================
+# 👤 GESTORES
+# =================================================================
 def buscar_gestor(setor_notificado):
     if not setor_notificado or str(setor_notificado).strip() == "":
         return ""
@@ -87,7 +95,7 @@ def buscar_gestor(setor_notificado):
     
     gestores = {
         "ALA D": "GESTOR DE ENFERMAGEM",
-        "AGÊNCIA TRANSFUSIONAL": "GESTOR DE AGÊNCIA",
+        "AGÊNCIA TRANSFUSIONAL": "GESTOR DA AGÊNCIA TRANSFUSIONAL",
         "ALA A": "GESTOR DE ENFERMAGEM",
         "ALA F (UTI B)": "GESTOR DE ENFERMAGEM",
         "ALA I": "GESTOR DE ENFERMAGEM",
@@ -102,9 +110,12 @@ def buscar_gestor(setor_notificado):
         "ECP - EQUIPE DE CUIDADOS COM A PELE": "GESTOR DA ECP",
         "AUXILIAR DE TRANSPORTE": "GESTOR DA CENTRAL INTERNA DE TRANSPORTE",
         "FISIOTERAPIA": "GESTOR DE FISIOTERAPIA",
-        "TERAPIA OCUPACIONAL": "GESTOR DE TERAPIA",
+        "TERAPIA OCUPACIONAL": "GESTOR DE TERAPIA OCUPACIONAL",
         "SERVIÇO SOCIAL": "GESTOR DE SERVIÇO SOCIAL",
         "NUTRIÇÃO": "GESTOR DE NUTRIÇÃO",
+        "GESTOR DE ENFERMAGEM": "GESTOR DE ENFERMAGEM",
+        "GESTOR DE GERÊNCIA DE ENFERMAGEM": "GESTOR DE GERÊNCIA DE ENFERMAGEM",
+        "NIR (NÚCLEO INTERNO DE REGULAÇÃO)": "GESTOR DO NIR",
     }
     
     for chave, gestor in gestores.items():
@@ -139,18 +150,8 @@ def gerar_docx(dados):
         st.error(f"Erro ao gerar arquivo: {str(e)}")
         return None
 
-def contar_enviados(df, coluna_status=1):
-    qtd = 0
-    for _, linha in df.iterrows():
-        if len(linha) <= coluna_status:
-            continue
-        status = tratar_texto(linha.iloc[coluna_status]).upper()
-        if status == "ENVIADO":
-            qtd += 1
-    return qtd
-
 # =================================================================
-# INTERFACE PRINCIPAL
+# 🖥️ INTERFACE PRINCIPAL
 # =================================================================
 
 st.set_page_config(page_title="Emissor de Memorandos", page_icon="📄", layout="wide")
@@ -163,8 +164,13 @@ if arquivo_excel:
     try:
         df = pd.read_excel(arquivo_excel, engine="openpyxl")
         
-        enviados = contar_enviados(df)
+        # ✅ Garantir coluna de Status
+        if 'Status' not in df.columns:
+            df.insert(1, 'Status', 'PENDENTE')
+        
+        # 📊 Resumo
         total = TOTAL_GERAL_MEMORANDOS
+        enviados = df['Status'].apply(lambda x: str(x).strip().upper() == "ENVIADO").sum()
         pendentes = total - enviados
         
         st.subheader("RESUMO GERAL")
@@ -179,10 +185,10 @@ if arquivo_excel:
         ano_atual = data_atual.year
         data_extenso = data_por_extenso(data_atual)
         
-        qtd_processados = 0
+        output_planilha = io.BytesIO()
         
+        # 🔄 Processar cada notificação
         for idx, linha in df.iterrows():
-            # ✅ IGNORAR LINHA SE SETOR NOTIFICADO ESTIVER VAZIO
             setor_notificado = tratar_texto(linha.iloc[14]) if len(linha) > 14 else ""
             if not setor_notificado:
                 continue
@@ -195,9 +201,10 @@ if arquivo_excel:
             if not nome_paciente:
                 continue
             
-            status = tratar_texto(linha.iloc[1]).upper() if len(linha) > 1 else ""
-            enviado = (status == "ENVIADO")
+            status_atual = tratar_texto(linha.get('Status', '')).upper()
+            enviado = (status_atual == "ENVIADO")
             
+            # 📅 Dados da notificação
             data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
             data_notificacao = formatar_data_sem_hora(linha.iloc[3]) if len(linha) > 3 else ""
             turno = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
@@ -213,11 +220,8 @@ if arquivo_excel:
             t = "☑" if "TARDE" in turno.upper() else "☐"
             n = "☑" if "NOITE" in turno.upper() else "☐"
             
-            # ✅ Gestor e E-mail do SETOR NOTIFICADO
             gestor = buscar_gestor(setor_notificado)
             email_destino = buscar_email_setor(setor_notificado)
-            
-            qtd_processados += 1
             
             hora_atual = datetime.now().hour
             if 6 <= hora_atual < 12:
@@ -227,15 +231,27 @@ if arquivo_excel:
             else:
                 saudacao = "Boa noite,"
             
+            # 📋 Título
             if enviado:
-                titulo_memo = f"~~✅ Notificação {num_notif} — {nome_paciente}~~  **ENVIADO**"
+                titulo_memo = f"~~✅ Notificação {num_notif} — {nome_paciente}~~  **[ENVIADO]**"
             else:
                 titulo_memo = f"📋 Notificação {num_notif} — {nome_paciente}"
             
             with st.expander(titulo_memo, expanded=not enviado):
-                if enviado:
-                    st.success("✅ Este memorando já foi enviado!")
-                    st.divider()
+                # ✅ CAIXINHA DE MARCAÇÃO
+                marcado = st.checkbox(
+                    "✅ Já enviei este memorando",
+                    value=enviado,
+                    key=f"check_{num_notif}_{idx}"
+                )
+                
+                if marcado and not enviado:
+                    df.at[idx, 'Status'] = 'ENVIADO'
+                    st.success("✅ Marcado como ENVIADO!")
+                elif not marcado and enviado:
+                    df.at[idx, 'Status'] = 'PENDENTE'
+                
+                st.divider()
                 
                 st.write(f"📅 Data de Emissão: {data_extenso}")
                 st.write(f"📅 Data da Ocorrência: {data_ocorrencia} | Notificação: {data_notificacao}")
@@ -292,13 +308,27 @@ nspsoc2@gmail.com
                 arquivo_pronto = gerar_docx(dados_docx)
                 if arquivo_pronto:
                     st.download_button(
-                        label="📄 Baixar Memorando",
+                        label="📄 Baixar Memorando" if not marcado else "🔒 Já Enviado",
                         data=arquivo_pronto,
                         file_name=f"NSP_Nº {num_notif}_{ano_atual}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key=f"download_{num_notif}_{idx}",
-                        disabled=enviado
+                        disabled=marcado
                     )
+        
+        st.divider()
+        # 💾 Salvar planilha atualizada
+        with pd.ExcelWriter(output_planilha, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Notificações')
+        output_planilha.seek(0)
+        
+        st.download_button(
+            label="💾 Baixar Planilha Atualizada com Status",
+            data=output_planilha,
+            file_name=f"notificacoes_atualizadas_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
     except Exception as e:
         st.error(f"Erro ao processar planilha: {str(e)}")
         import traceback
