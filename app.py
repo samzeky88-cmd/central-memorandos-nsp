@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Final Completa: Estatísticas + Gráficos + Novo Texto
+# Versão Final: Todos visíveis + Riscado Enviado + Contagem Correta
 # =================================================================
 
 import os
@@ -56,7 +56,7 @@ df_setores = df_setores[df_setores["E-MAIL"].str.strip() != ""].reset_index(drop
 # 🎯 CONFIGURAÇÃO DA PÁGINA
 # =================================================================
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
-aba_processar, aba_estatisticas = st.tabs(["📝 Processar Memorandos", "📊 Estatísticas e Desempenho"])
+aba_processar, aba_estatisticas = st.tabs(["📝 Lista de Memorandos", "📊 Estatísticas"])
 
 # =================================================================
 # 🛠️ FUNÇÕES AUXILIARES
@@ -157,6 +157,7 @@ def processar_bloco(linha, bloco_nome, idx, nome_paciente, data_extenso,
         return None
     
     num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
+    status = tratar_texto(linha.iloc[1]).upper() if len(linha) > 1 else "PENDENTE"
     email_destino = buscar_email_setor(setor_destino)
     
     if pd.isna(turno_bruto):
@@ -194,6 +195,7 @@ def processar_bloco(linha, bloco_nome, idx, nome_paciente, data_extenso,
         "bloco": bloco_nome,
         "num_memo": num_memo,
         "num_notif": num_notif,
+        "status": status,
         "gestor": gestor,
         "setor": setor_destino,
         "email": email_destino,
@@ -202,7 +204,7 @@ def processar_bloco(linha, bloco_nome, idx, nome_paciente, data_extenso,
         "corpo_email": corpo_email,
     }
 
-def gerar_docx(dados, nome_arquivo_base):
+def gerar_docx(dados):
     try:
         with open("modelo_memorando.docx", "rb") as f:
             doc = Document(f)
@@ -219,16 +221,18 @@ def gerar_docx(dados, nome_arquivo_base):
         return None
 
 # =================================================================
-# 📊 COLETAR ESTATÍSTICAS
+# 📊 COLETAR TODOS OS MEMORANDOS
 # =================================================================
 def coletar_todos_memorandos(df):
     todos_memorandos = []
     for _, linha in df.iterrows():
         status = tratar_texto(linha.iloc[1]) if len(linha) > 1 else ""
+        dt_notif = formatar_data_br(linha.iloc[3]) if len(linha) > 3 else ""
+        
         for g_col, s_col, m_col in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
             num_memo = limpar_numero(linha.iloc[m_col]) if m_col < len(linha) else ""
             setor = tratar_texto(linha.iloc[s_col]) if s_col < len(linha) else ""
-            dt_notif = formatar_data_br(linha.iloc[3]) if len(linha) > 3 else ""
+            
             if num_memo and num_memo != "" and "Nº MEMO" not in num_memo:
                 data_obj = None
                 try:
@@ -236,6 +240,7 @@ def coletar_todos_memorandos(df):
                         data_obj = pd.to_datetime(dt_notif, dayfirst=True)
                 except:
                     pass
+                
                 todos_memorandos.append({
                     "numero_memo": num_memo,
                     "setor": setor,
@@ -243,44 +248,47 @@ def coletar_todos_memorandos(df):
                     "data": data_obj,
                     "notificacao": limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
                 })
+    
     return pd.DataFrame(todos_memorandos)
 
 # =================================================================
-# 📑 ABA 1 — PROCESSAR
+# 📑 ABA 1 — LISTA DE MEMORANDOS
 # =================================================================
 with aba_processar:
-    st.title("Emissor de Memorandos — NSP / HCID")
+    st.title("📝 Lista de Memorandos")
     data_selecionada = st.date_input("Data de Envio", datetime.now())
     arquivo_excel = st.file_uploader("Planilha com Incidentes (.xlsx)", type=["xlsx"])
     
     if arquivo_excel:
         try:
             df = pd.read_excel(arquivo_excel, engine="openpyxl")
-            df_stats = coletar_todos_memorandos(df)
-            total_memorandos = len(df_stats)
-            enviados = len(df_stats[df_stats["status"] == "ENVIADO"])
+            df_memos = coletar_todos_memorandos(df)
+            
+            # ✅ CONTAGEM — APENAS DE MEMORANDOS, NÃO DE LINHAS
+            total_memorandos = len(df_memos)
+            enviados = len(df_memos[df_memos["status"] == "ENVIADO"])
             pendentes = total_memorandos - enviados
             
-            st.subheader("Resumo Geral (por Memorando)")
+            st.subheader("📊 Resumo — Por Memorando")
             col1, col2, col3 = st.columns(3)
-            col1.metric("Total de Memorandos", total_memorandos)
-            col2.metric("Já Enviados", enviados)
-            col3.metric("Pendentes", pendentes)
+            col1.metric("📋 Total de Memorandos", total_memorandos)
+            col2.metric("✅ Já Enviados", enviados)
+            col3.metric("⏳ Pendentes", pendentes)
             
-            status_col_index = 1
-            filtro_nao_enviado = df.iloc[:, status_col_index].apply(lambda x: str(x).strip().upper() != "ENVIADO")
-            df_filtrado = df[filtro_nao_enviado].reset_index(drop=True)
+            st.info(f"Mostrando todos os {total_memorandos} memorandos — enviados aparecem riscados")
+            
             data_extenso = data_por_extenso(data_selecionada)
             
-            st.info(f"Exibindo apenas os {len(df_filtrado)} registro(s) com memorandos pendentes")
-            
-            for idx, linha in df_filtrado.iterrows():
+            # Processar TODAS as linhas — enviados e pendentes
+            for idx, linha in df.iterrows():
                 num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
                 if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
                     continue
+                
                 nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else "Paciente"
                 if nome_paciente.upper() == "PACIENTE":
                     continue
+                
                 dt_ocorr = formatar_data_br(linha.iloc[2]) if len(linha) > 2 else ""
                 dt_notif = formatar_data_br(linha.iloc[3]) if len(linha) > 3 else ""
                 local = tratar_texto(linha.iloc[5]) if len(linha) > 5 else ""
@@ -291,32 +299,40 @@ with aba_processar:
                 setor_notificante = tratar_texto(linha.iloc[11]) if len(linha) > 11 else ""
                 sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
                 turno_bruto = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
+                status_linha = tratar_texto(linha.iloc[1]).upper() if len(linha) > 1 else "PENDENTE"
                 
-                bloco1 = processar_bloco(linha, "Memorando 01", idx, nome_paciente, data_extenso,
-                                        13, 14, 15, dt_ocorr, dt_notif, local, tipo, classificacao,
+                # Processar os 4 blocos
+                blocos = []
+                for g, s, m in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
+                    b = processar_bloco(linha, "Memorando", idx, nome_paciente, data_extenso,
+                                        g, s, m, dt_ocorr, dt_notif, local, tipo, classificacao,
                                         desc, leito, setor_notificante, sugestao, turno_bruto)
-                bloco2 = processar_bloco(linha, "Memorando 02", idx, nome_paciente, data_extenso,
-                                        17, 18, 19, dt_ocorr, dt_notif, local, tipo, classificacao,
-                                        desc, leito, setor_notificante, sugestao, turno_bruto)
-                bloco3 = processar_bloco(linha, "Memorando 03", idx, nome_paciente, data_extenso,
-                                        22, 23, 24, dt_ocorr, dt_notif, local, tipo, classificacao,
-                                        desc, leito, setor_notificante, sugestao, turno_bruto)
-                bloco4 = processar_bloco(linha, "Memorando 04", idx, nome_paciente, data_extenso,
-                                        26, 27, 28, dt_ocorr, dt_notif, local, tipo, classificacao,
-                                        desc, leito, setor_notificante, sugestao, turno_bruto)
+                    if b:
+                        blocos.append(b)
                 
-                blocos_ativos = [b for b in [bloco1, bloco2, bloco3, bloco4] if b is not None]
+                if not blocos:
+                    continue
                 
-                with st.expander(f"Notificação {num_notif} — {nome_paciente} — {len(blocos_ativos)} memorando(s)"):
-                    st.write(f"Data: {data_extenso} | Total de Memorandos: {len(blocos_ativos)}")
-                    for b in blocos_ativos:
-                        st.subheader(f"{b['bloco']} — Nº {b['num_memo']}")
-                        st.write(f"Setor: {b['setor']} | Gestor: {b['gestor']}")
-                        if b['email']:
-                            st.info(f"E-mail: {b['email']}")
-                        else:
-                            st.warning("E-mail não encontrado")
-                        docx_bytes = gerar_docx(b['dados_docx'], f"MEMO_{b['num_memo']}_NOTIF_{num_notif}")
-                        if docx_bytes:
-                            st.download_button(
-                               
+                # Cabeçalho da notificação
+                if status_linha == "ENVIADO":
+                    st.markdown(f"~~📋 Notificação {num_notif} — {nome_paciente}~~ ✅ **ENVIADO**")
+                else:
+                    st.subheader(f"📋 Notificação {num_notif} — {nome_paciente}")
+                
+                for b in blocos:
+                    if b["status"] == "ENVIADO":
+                        st.markdown(f"~~📄 Memorando Nº {b['num_memo']} — {b['setor']}~~ ✅ **ENVIADO**")
+                    else:
+                        with st.expander(f"📄 Memorando Nº {b['num_memo']} — {b['setor']} — ⏳ PENDENTE"):
+                            st.write(f"**Gestor:** {b['gestor']}")
+                            if b['email']:
+                                st.info(f"📧 E-mail: {b['email']}")
+                            else:
+                                st.warning("⚠️ E-mail não encontrado")
+                            
+                            docx_bytes = gerar_docx(b['dados_docx'])
+                            if docx_bytes:
+                                st.download_button(
+                                    label="📥 Baixar Memorando (DOCX)",
+                                    data=docx_bytes,
+                                    file_name=f"MEMORANDO_{b['num_memo']}_NOTIF_{num_notif}.docx
