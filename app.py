@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão: Estatísticas + Gráficos + Novo Texto + Contagem por Memorando
+# Versão Final: Estatísticas + Gráficos + Novo Texto + Contagem por Memorando
 # =================================================================
 
 import os
@@ -330,4 +330,4 @@ with aba_processar:
                 blocos_ativos = [b for b in [bloco1, bloco2, bloco3, bloco4] if b is not None]
                 
                 with st.expander(f"📋 Notificação {num_notif} — {nome_paciente} — {len(blocos_ativos)} memorando(s)"):
-                    st
+                    st.write(f"**📅 Data:** {data
