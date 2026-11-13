@@ -43,7 +43,7 @@ def data_por_extenso(dt):
              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     return f"{dt.day} de {meses[dt.month-1]} de {dt.year}"
 
-# ✅ BUSCA E-mail — Baseado EXATAMENTE no SETOR NOTIFICADO
+# ✅ E-MAIL — Baseado EXCLUSIVAMENTE no SETOR NOTIFICADO
 def buscar_email_setor(setor_notificado):
     if not setor_notificado or str(setor_notificado).strip() == "":
         return "nspsoc2@gmail.com"
@@ -51,12 +51,9 @@ def buscar_email_setor(setor_notificado):
     nome = str(setor_notificado).strip().upper()
     
     emails = {
-        "DIREÇÃO": "direcao.hospitaldacidade@gmail.com",
-        "GABINETE DA DIREÇÃO": "gabinete.hospitaldacidade@gmail.com",
-        "AGÊNCIA TRANSFUSIONAL": "agenciatransfusional.hcid@gmail.com",
         "ALA D": "ortopediaalad.hcid@gmail.com",
+        "AGÊNCIA TRANSFUSIONAL": "agenciatransfusional.hcid@gmail.com",
         "ALA A": "alaaclinicamedica@gmail.com",
-        "ALA B": "alab.hcid@gmail.com",
         "ALA F (UTI B)": "utihcid@gmail.com",
         "ALA I": "ortopediaalai.hcid@gmail.com",
         "ALA F (UTI C)": "utihcid@gmail.com",
@@ -69,10 +66,10 @@ def buscar_email_setor(setor_notificado):
         "ALA F (UTI A)": "utihcid@gmail.com",
         "ECP - EQUIPE DE CUIDADOS COM A PELE": "carlosemilioecp@gmail.com",
         "AUXILIAR DE TRANSPORTE": "centraltransporte.hcid@gmail.com",
-        "TRANSPORTE EXTERNO": "centraltransporte.hcid@gmail.com",
         "FISIOTERAPIA": "fisioreabsoc2@gmail.com",
         "TERAPIA OCUPACIONAL": "terapiaocupacional.hcid@gmail.com",
         "SERVIÇO SOCIAL": "servicosocialhcid@gmail.com",
+        "NUTRIÇÃO": "nutricaohospitaldacidade@gmail.com",
     }
     
     for chave, email in emails.items():
@@ -81,7 +78,7 @@ def buscar_email_setor(setor_notificado):
     
     return "nspsoc2@gmail.com"
 
-# ✅ BUSCA GESTOR — Baseado no SETOR NOTIFICADO
+# ✅ GESTOR — Baseado EXCLUSIVAMENTE no SETOR NOTIFICADO
 def buscar_gestor(setor_notificado):
     if not setor_notificado or str(setor_notificado).strip() == "":
         return ""
@@ -107,6 +104,7 @@ def buscar_gestor(setor_notificado):
         "FISIOTERAPIA": "GESTOR DE FISIOTERAPIA",
         "TERAPIA OCUPACIONAL": "GESTOR DE TERAPIA",
         "SERVIÇO SOCIAL": "GESTOR DE SERVIÇO SOCIAL",
+        "NUTRIÇÃO": "GESTOR DE NUTRIÇÃO",
     }
     
     for chave, gestor in gestores.items():
@@ -187,7 +185,7 @@ if arquivo_excel:
             # ✅ IGNORAR LINHA SE SETOR NOTIFICADO ESTIVER VAZIO
             setor_notificado = tratar_texto(linha.iloc[14]) if len(linha) > 14 else ""
             if not setor_notificado:
-                continue  # ← PULA LINHA VAZIA COMPLETAMENTE
+                continue
             
             num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
             if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
@@ -197,7 +195,6 @@ if arquivo_excel:
             if not nome_paciente:
                 continue
             
-            # ✅ VERIFICAR STATUS — SE ENVIADO, MARCAR TARJADO
             status = tratar_texto(linha.iloc[1]).upper() if len(linha) > 1 else ""
             enviado = (status == "ENVIADO")
             
@@ -209,7 +206,6 @@ if arquivo_excel:
             classificacao_incidente = tratar_texto(linha.iloc[7]) if len(linha) > 7 else ""
             descricao_notificacao = tratar_texto(linha.iloc[8]) if len(linha) > 8 else ""
             leito = tratar_texto(linha.iloc[10]) if len(linha) > 10 else ""
-            setor_notificante = tratar_texto(linha.iloc[11]) if len(linha) > 11 else ""
             sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
             
             manha = "☐"
@@ -223,13 +219,12 @@ if arquivo_excel:
                 elif "NOITE" in turno:
                     noite = "☑"
             
-            # ✅ BUSCA GESTOR E EMAIL PELO SETOR NOTIFICADO
+            # ✅ SÓ SETOR NOTIFICADO → GESTOR E E-MAIL
             gestor = buscar_gestor(setor_notificado)
             email_destino = buscar_email_setor(setor_notificado)
             
             qtd_processados += 1
             
-            # Saudação automática conforme horário
             hora_atual = datetime.now().hour
             if 6 <= hora_atual < 12:
                 saudacao = "Bom dia,"
@@ -238,7 +233,6 @@ if arquivo_excel:
             else:
                 saudacao = "Boa noite,"
             
-            # ✅ TÍTULO — RISCADO SE JÁ ENVIADO
             if enviado:
                 titulo_memo = f"~~✅ Notificação {num_notif} — {nome_paciente}~~  **ENVIADO**"
             else:
@@ -251,13 +245,13 @@ if arquivo_excel:
                 
                 st.write(f"📅 Data de Emissão: {data_extenso}")
                 st.write(f"📅 Data da Ocorrência: {data_ocorrencia} | Notificação: {data_notificacao}")
-                st.write(f"📍 Local: {localizacao} | Setor Notificante: {setor_notificante}")
+                st.write(f"📍 Local: {localizacao}")
                 st.write(f"📤 **Setor Notificado:** {setor_notificado}")
                 st.write(f"👤 **Gestor:** {gestor}")
                 st.write(f"⚠️ Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
                 st.write(f"👤 Paciente: {nome_paciente} | Leito: {leito}")
                 st.write(f"🔄 Sugestão: {sugestao}")
-                st.write(f"📧 E-mail: {email_destino}")
+                st.write(f"📧 **E-mail para envio:** {email_destino}")
                 
                 corpo_email = f"""
 {saudacao} Prezado(a),
@@ -296,7 +290,6 @@ nspsoc2@gmail.com
                     "{{descricao_notificacao}}": descricao_notificacao,
                     "{{nome_paciente}}": nome_paciente,
                     "{{leito}}": leito,
-                    "{{setor_notificante}}": setor_notificante,
                     "{{sugestao}}": sugestao,
                 }
                 
