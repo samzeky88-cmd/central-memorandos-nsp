@@ -275,18 +275,18 @@ if arquivo_excel:
                 t = "☑" if "TARDE" in turno.upper() else "☐"
                 n = "☑" if "NOITE" in turno.upper() else "☐"
                 
-                gestor = buscar_gestor(setor_notificado)
+                               gestor = buscar_gestor(setor_notificado)
                 email_destino = buscar_email_setor(setor_notificado)
-                
-                                  hora_atual = datetime.now().hour
-                    if 6 <= hora_atual < 12:
-                        saudacao = "Bom dia,"
-                    elif 12 <= hora_atual < 18:
-                        saudacao = "Boa tarde,"
-                    else:
-                        saudacao = "Boa noite,"
 
-                    corpo_email = f"""
+                hora_atual = datetime.now().hour
+                if 6 <= hora_atual < 12:
+                    saudacao = "Bom dia,"
+                elif 12 <= hora_atual < 18:
+                    saudacao = "Boa tarde,"
+                else:
+                    saudacao = "Boa noite,"
+
+                corpo_email = f"""
 {saudacao} Prezado(a),
 
 Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
@@ -301,38 +301,38 @@ Ezequias S. Santos
 Agente Administrativo — NAQH / NSP
 Núcleo de Segurança do Paciente
 nspsoc2@gmail.com
-                    """
+                """
 
-                    with st.expander("Texto do E-mail"):
-                        st.text(corpo_email.strip())
+                with st.expander("Texto do E-mail"):
+                    st.text(corpo_email.strip())
 
-                    dados_docx = {
-                        "{{numero_memorando}}": num_memorando,
-                        "{{notificacao_n}}": num_notificacao,
-                        "{{gestor}}": gestor,
-                        "{{setor_notificado}}": setor_notificado,
-                        "{{setor_notificante}}": setor_notificante,
-                        "{{data_envio}}": data_extenso,
-                        "{{data_ocorrencia}}": data_ocorrencia,
-                        "{{data_notificacao}}": data_notificacao,
-                        "{{m}}": m,
-                        "{{t}}": t,
-                        "{{n}}": n,
-                        "{{localizacao}}": localizacao,
-                        "{{tipo_incidente}}": tipo_incidente,
-                        "{{classificacao_incidente}}": classificacao_incidente,
-                        "{{descricao_notificacao}}": descricao_notificacao,
-                        "{{nome_paciente}}": nome_paciente,
-                        "{{leito}}": leito,
-                        "{{sugestao}}": sugestao,
-                    }
+                dados_docx = {
+                    "{{numero_memorando}}": num_memorando,
+                    "{{notificacao_n}}": num_notificacao,
+                    "{{gestor}}": gestor,
+                    "{{setor_notificado}}": setor_notificado,
+                    "{{setor_notificante}}": setor_notificante,
+                    "{{data_envio}}": data_extenso,
+                    "{{data_ocorrencia}}": data_ocorrencia,
+                    "{{data_notificacao}}": data_notificacao,
+                    "{{m}}": m,
+                    "{{t}}": t,
+                    "{{n}}": n,
+                    "{{localizacao}}": localizacao,
+                    "{{tipo_incidente}}": tipo_incidente,
+                    "{{classificacao_incidente}}": classificacao_incidente,
+                    "{{descricao_notificacao}}": descricao_notificacao,
+                    "{{nome_paciente}}": nome_paciente,
+                    "{{leito}}": leito,
+                    "{{sugestao}}": sugestao,
+                }
 
-                    arquivo_pronto = gerar_docx(dados_docx)
-                    if arquivo_pronto:
-                        st.download_button(
-                            label="📄 Baixar Memorando",
-                            data=arquivo_pronto,
-                            file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            key=f"download_pend_{num_notificacao}_{num_memorando}_{idx}"
-                        )
+                arquivo_pronto = gerar_docx(dados_docx)
+                if arquivo_pronto:
+                    st.download_button(
+                        label="📄 Baixar Memorando",
+                        data=arquivo_pronto,
+                        file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"download_pend_{num_notificacao}_{num_memorando}_{idx}"
+                    )
