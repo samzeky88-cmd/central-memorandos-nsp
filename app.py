@@ -1,3 +1,8 @@
+# =================================================================
+# SISTEMA DE CERTIFICADOS — COORDENADORES
+# Total de Treinamentos Realizados: 44 (FIXO)
+# =================================================================
+
 import streamlit as st
 import pandas as pd
 from docxtpl import DocxTemplate
@@ -217,9 +222,9 @@ with aba_ranking:
         
         st.subheader("📈 Resumo Geral")
         
-        # ✅ TOTAL DEFINIDO POR VOCÊ — FIXO EM 44
+        # ✅ TOTAL DE TREINAMENTOS — FIXO EM 44
         st.write(f"**Total de participantes únicos:** {len(ranking)}")
-        st.write(f"**Total de treinamentos realizados:** 44")
+        st.write("**Total de treinamentos realizados:** 44")
         
         st.subheader("🏆 Destaques — Top 10")
         emojis = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
