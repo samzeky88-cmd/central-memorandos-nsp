@@ -316,4 +316,3 @@ if arquivo_excel:
                         "{{n}}": m_noite,
                         "{{localizacao}}": localizacao,
                         "{{tipo_incidente}}": tipo_incidente,
-                        "{{classificacao_inc
