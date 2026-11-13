@@ -274,31 +274,31 @@ if arquivo_excel:
             
             qtd_processados += 1
             with st.expander(f"Notificação {num_notif} — {nome_paciente} ({len(blocos_memo)} memo(s))", expanded=True):
-                st.write(f"Data de Emiss o: {data_extenso}")
-                st.write(f"Ocorr ncia: {data_ocorrencia} | Notifica o: {data_notificacao}")
+                st.write(f"Data de Emissão: {data_extenso}")
+                st.write(f"Ocorrência: {data_ocorrencia} | Notificação: {data_notificacao}")
                 st.write(f"Local: {localizacao} | Setor Notificante: {setor_notificante}")
-                st.write(f"Tipo: {tipo_incidente} | Classifica o: {classificacao_incidente}")
+                st.write(f"Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
                 st.write(f"Paciente: {nome_paciente} | Leito: {leito}")
-                st.write(f"Turno: {m_manha} MANH  {m_tarde} TARDE  {m_noite} NOITE")
+                st.write(f"Turno: {m_manha} MANHÃ  {m_tarde} TARDE  {m_noite} NOITE")
                 if descricao_notificacao:
-                    st.write(f"Descri o: {descricao_notificacao}")
+                    st.write(f"Descrição: {descricao_notificacao}")
                 if sugestao:
-                    st.write(f"Sugest o: {sugestao}")
+                    st.write(f"Sugestão: {sugestao}")
                 
                 for b in blocos_memo:
                     email_destino = buscar_email_setor(b["setor"])
-                    st.subheader(f"MEMO: NSP N {b['num_memo']}/{ano_atual}")
+                    st.subheader(f"MEMO: NSP Nº {b['num_memo']}/{ano_atual}")
                     st.write(f"Para: {b['gestor']} da {b['setor']}")
-                    st.write(f"Assunto: N {num_notif}")
+                    st.write(f"Assunto: Nº {num_notif}")
                     st.info(f"E-mail: {email_destino}")
                     
-                    corpo_email = "Boa Tarde, Prezados, ou bom dia de acordo com o hor rio.\n\n"
-                    corpo_email += "Segue em anexo o Memorando N " + b["num_memo"] + "/" + str(ano_atual)
-                    corpo_email += " referente notifica o N " + num_notif + ", para ser analisado e "
-                    corpo_email += "respondido (via e-mail) em at 15 dias ap s a data presente.\n\n"
-                    corpo_email += "ATEN O: A resposta via e-mail deve constar um arquivo em forma de Word "
+                    corpo_email = "Boa Tarde, Prezados, ou bom dia de acordo com o horário.\n\n"
+                    corpo_email += "Segue em anexo o Memorando Nº " + b["num_memo"] + "/" + str(ano_atual)
+                    corpo_email += " referente à notificação Nº " + num_notif + ", para ser analisado e "
+                    corpo_email += "respondido (via e-mail) em até 15 dias após a data presente.\n\n"
+                    corpo_email += "ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de Word "
                     corpo_email += "ou PDF para arquivamento de respostas conforme rotina institucional. "
-                    corpo_email += "N o ser o aceitas mensagens via e-mail sem arquivo como resposta.\n\n"
+                    corpo_email += "Não serão aceitas mensagens via e-mail sem arquivo como resposta.\n\n"
                     corpo_email += "Atenciosamente,\n\nEzequias S. Santos\nAgente Administrativo - NAQH & NSP\nnspsoc2@gmail.com"
                     
                     with st.expander("Texto do E-mail"):
@@ -316,4 +316,4 @@ if arquivo_excel:
                         "{{n}}": m_noite,
                         "{{localizacao}}": localizacao,
                         "{{tipo_incidente}}": tipo_incidente,
-                        "{{classificacao_incidente}}": classificacao_incidente,
+                        "{{classificacao_inc
