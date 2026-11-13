@@ -1,6 +1,9 @@
 # =================================================================
 # GERADOR DE MEMORANDOS — HOSPITAL DA CIDADE DR. JACKSON LAGO
-# VERSÃO FINAL: E-mails corretos + Marcação de Enviado na tela
+# ✅ Notificação (Coluna A) + Memorando (Coluna P)
+# ✅ E-mails e Gestores completos
+# ✅ Marcação de enviado na tela
+# ✅ Contagem automática de totais
 # =================================================================
 
 import pandas as pd
@@ -8,8 +11,6 @@ import streamlit as st
 import io
 from datetime import datetime
 from docx import Document
-
-TOTAL_GERAL_MEMORANDOS = 964
 
 # =================================================================
 # FUNÇÕES AUXILIARES
@@ -45,7 +46,7 @@ def data_por_extenso(dt):
     return f"{dt.day} de {meses[dt.month-1]} de {dt.year}"
 
 # =================================================================
-# 📧 E-MAILS — Lista oficial do Hospital da Cidade
+# 📧 E-MAILS — Lista completa
 # =================================================================
 def buscar_email_setor(setor_notificado):
     if not setor_notificado or str(setor_notificado).strip() == "":
@@ -76,6 +77,9 @@ def buscar_email_setor(setor_notificado):
         "GESTOR DE ENFERMAGEM": "enfermagem.hcid@gmail.com",
         "GESTOR DE GERÊNCIA DE ENFERMAGEM": "gerenciaenfermagem.hcid@gmail.com",
         "NIR (NÚCLEO INTERNO DE REGULAÇÃO)": "coordenanirs2@gmail.com",
+        "CENTRO CIRÚRGICO": "centrocirurgicosoc2@gmail.com",
+        "ENDOSCOPIA": "endoscopiasoc2@gmail.com",
+        "DIREÇÃO ADMINISTRATIVA": "direcao.hospitaldacidade@gmail.com",
     }
     
     for chave, email in emails.items():
@@ -85,7 +89,7 @@ def buscar_email_setor(setor_notificado):
     return "nspsoc2@gmail.com"
 
 # =================================================================
-# 👤 GESTORES
+# 👤 GESTORES — Lista completa
 # =================================================================
 def buscar_gestor(setor_notificado):
     if not setor_notificado or str(setor_notificado).strip() == "":
@@ -116,6 +120,9 @@ def buscar_gestor(setor_notificado):
         "GESTOR DE ENFERMAGEM": "GESTOR DE ENFERMAGEM",
         "GESTOR DE GERÊNCIA DE ENFERMAGEM": "GESTOR DE GERÊNCIA DE ENFERMAGEM",
         "NIR (NÚCLEO INTERNO DE REGULAÇÃO)": "GESTOR DO NIR",
+        "CENTRO CIRÚRGICO": "GESTOR DE ENFERMAGEM",
+        "ENDOSCOPIA": "GESTOR DE ENDOSCOPIA",
+        "DIREÇÃO ADMINISTRATIVA": "GESTOR DE DIREÇÃO",
     }
     
     for chave, gestor in gestores.items():
@@ -168,8 +175,8 @@ if arquivo_excel:
         if 'Status' not in df.columns:
             df.insert(1, 'Status', 'PENDENTE')
         
-        # 📊 Resumo
-        total = TOTAL_GERAL_MEMORANDOS
+        # 📊 Resumo — Calculado automaticamente
+        total = len(df)
         enviados = df['Status'].apply(lambda x: str(x).strip().upper() == "ENVIADO").sum()
         pendentes = total - enviados
         
@@ -182,29 +189,28 @@ if arquivo_excel:
         st.divider()
         
         data_atual = datetime.now()
-        ano_atual = data_atual.year
         data_extenso = data_por_extenso(data_atual)
         
         output_planilha = io.BytesIO()
         
-        # 🔄 Processar cada notificação
+        # 🔄 Processar cada linha
         for idx, linha in df.iterrows():
-            setor_notificado = tratar_texto(linha.iloc[14]) if len(linha) > 14 else ""
-            if not setor_notificado:
+            # ✅ Coluna A = Nº DA NOTIFICAÇÃO
+            num_notificacao = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
+            if not num_notificacao or num_notificacao.upper() == "Nº" or "NOTIF" in str(num_notificacao).upper():
                 continue
             
-            num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
-            if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
+            # ✅ Coluna P = Nº DO MEMORANDO
+            num_memorando = tratar_texto(linha.iloc[15]) if len(linha) > 15 else ""
+            if not num_memorando:
                 continue
             
             nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else ""
-            if not nome_paciente:
-                continue
             
             status_atual = tratar_texto(linha.get('Status', '')).upper()
             enviado = (status_atual == "ENVIADO")
             
-            # 📅 Dados da notificação
+            # 📅 Dados
             data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
             data_notificacao = formatar_data_sem_hora(linha.iloc[3]) if len(linha) > 3 else ""
             turno = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
@@ -215,6 +221,7 @@ if arquivo_excel:
             leito = tratar_texto(linha.iloc[10]) if len(linha) > 10 else ""
             setor_notificante = tratar_texto(linha.iloc[11]) if len(linha) > 11 else ""
             sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
+            setor_notificado = tratar_texto(linha.iloc[18]) if len(linha) > 18 else ""  # Coluna S
             
             m = "☑" if "MANHÃ" in turno.upper() else "☐"
             t = "☑" if "TARDE" in turno.upper() else "☐"
@@ -233,16 +240,16 @@ if arquivo_excel:
             
             # 📋 Título
             if enviado:
-                titulo_memo = f"~~✅ Notificação {num_notif} — {nome_paciente}~~  **[ENVIADO]**"
+                titulo_memo = f"~~✅ Notificação Nº {num_notificacao} — {nome_paciente}~~  **[ENVIADO]**"
             else:
-                titulo_memo = f"📋 Notificação {num_notif} — {nome_paciente}"
+                titulo_memo = f"📋 Notificação Nº {num_notificacao} — {nome_paciente}"
             
             with st.expander(titulo_memo, expanded=not enviado):
-                # ✅ CAIXINHA DE MARCAÇÃO
+                # ✅ Caixinha de marcação
                 marcado = st.checkbox(
                     "✅ Já enviei este memorando",
                     value=enviado,
-                    key=f"check_{num_notif}_{idx}"
+                    key=f"check_{num_notificacao}_{num_memorando}_{idx}"
                 )
                 
                 if marcado and not enviado:
@@ -264,13 +271,14 @@ if arquivo_excel:
                 st.write(f"💡 Sugestão: {sugestao}")
                 st.write(f"📧 E-mail para envio: {email_destino}")
                 
+                # ✅ Texto do e-mail CORRIGIDO
                 corpo_email = f"""
 {saudacao} Prezado(a),
 
-Segue em anexo o Memorando Nº {num_notif}/{ano_atual} referente à notificação Nº {num_notif}, 
-para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.
+Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
+para ser analisada e respondida (via e-mail) em até 15 dias após a data presente.
 
-ATENÇÃO: A resposta via e-mail deve conter um arquivo em formato Word ou PDF para arquivamento 
+ATENÇÃO: A resposta via e-mail deve conter um arquivo em formato Word ou PDF para arquivamento
 das respostas conforme rotina institucional. Não serão aceitas mensagens sem arquivo anexo.
 
 Atenciosamente,
@@ -285,8 +293,8 @@ nspsoc2@gmail.com
                     st.text(corpo_email.strip())
                 
                 dados_docx = {
-                    "{{numero_memorando}}": f"{num_notif}/{ano_atual}",
-                    "{{notificacao_n}}": num_notif,
+                    "{{numero_memorando}}": num_memorando,
+                    "{{notificacao_n}}": num_notificacao,
                     "{{gestor}}": gestor,
                     "{{setor_notificado}}": setor_notificado,
                     "{{setor_notificante}}": setor_notificante,
@@ -310,9 +318,9 @@ nspsoc2@gmail.com
                     st.download_button(
                         label="📄 Baixar Memorando" if not marcado else "🔒 Já Enviado",
                         data=arquivo_pronto,
-                        file_name=f"NSP_Nº {num_notif}_{ano_atual}.docx",
+                        file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"download_{num_notif}_{idx}",
+                        key=f"download_{num_notificacao}_{num_memorando}_{idx}",
                         disabled=marcado
                     )
         
