@@ -43,100 +43,77 @@ def data_por_extenso(dt):
              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     return f"{dt.day} de {meses[dt.month-1]} de {dt.year}"
 
-def buscar_email_setor(nome_setor):
-    if not nome_setor or str(nome_setor).strip() == "":
+# ✅ BUSCA E-mail — Baseado EXATAMENTE no SETOR NOTIFICADO
+def buscar_email_setor(setor_notificado):
+    if not setor_notificado or str(setor_notificado).strip() == "":
         return "nspsoc2@gmail.com"
     
-    nome = str(nome_setor).strip().upper()
+    nome = str(setor_notificado).strip().upper()
     
     emails = {
         "DIREÇÃO": "direcao.hospitaldacidade@gmail.com",
         "GABINETE DA DIREÇÃO": "gabinete.hospitaldacidade@gmail.com",
         "AGÊNCIA TRANSFUSIONAL": "agenciatransfusional.hcid@gmail.com",
-        "ALA A - ENFERMAGEM": "alaaclinicamedica@gmail.com",
-        "ALA B - ENFERMAGEM": "alab.hcid@gmail.com",
-        "ALA C - ENFERMAGEM": "cirurgica.hcid@gmail.com",
-        "ALA D - ENFERMAGEM": "ortopediaalad.hcid@gmail.com",
-        "ALA G/H": "aladgh.hcid@gmail.com",
-        "ALA F - ENFERMAGEM": "utihcid@gmail.com",
-        "ALA I - ENFERMAGEM": "ortopediaalai.hcid@gmail.com",
-        "ALA J - ENFERMAGEM": "ortopediaalaj.hcid@gmail.com",
-        "ALA L - ENFERMAGEM": "alalortopedia.hcid@gmail.com",
-        "ALMOXARIFADO": "almoxarifadosocorrao2@gmail.com",
-        "AMBULATÓRIO": "ambulatorio.hcid@gmail.com",
-        "ASSESSORIA JURÍDICA": "fernandoacmoraes.advogado@gmail.com",
-        "CAC": "cac.socorrao2@gmail.com",
-        "CENTRAL DE CÓPIAS": "centraldecopias.hcid@gmail.com",
-        "CCIH": "ccih.hcid@gmail.com",
-        "CENTRO CIRÚRGICO - ENFERMAGEM": "centrocirurgicosoc2@gmail.com",
-        "COMISSÃO DE ÓBITOS": "comissaodeobito.hcid@gmail.com",
-        "COMISSÃO DE ÉTICA EM ENFERMAGEM": "comissaodeetica.soc2@gmail.com",
-        "CME": "cmeesterilizacao@gmail.com",
-        "DOCUMENTOS INSTITUCIONAIS": "documentos.soc2@gmail.com",
-        "ECP": "carlosemilioecp@gmail.com",
-        "ENDOSCOPIA": "endoscopiasoc2@gmail.com",
-        "EDOT": "edot.hcid@gmail.com",
-        "EMTN": "emtnhospitaldacidade@gmail.com",
-        "ESCALAS": "escalahcid25@gmail.com",
+        "ALA D": "ortopediaalad.hcid@gmail.com",
+        "ALA A": "alaaclinicamedica@gmail.com",
+        "ALA B": "alab.hcid@gmail.com",
+        "ALA F (UTI B)": "utihcid@gmail.com",
+        "ALA I": "ortopediaalai.hcid@gmail.com",
+        "ALA F (UTI C)": "utihcid@gmail.com",
+        "ALA G": "aladgh.hcid@gmail.com",
+        "SALA VERMELHA": "salavermelhasdm@gmail.com",
+        "ALA J": "ortopediaalaj.hcid@gmail.com",
         "FARMÁCIA": "farmacia.hcid@gmail.com",
-        "FARMACOVIGILÂNCIA": "farmacovigilanciahcid@gmail.com",
-        "FATURAMENTO": "contasmedicassocorrao2@gmail.com",
-        "FISIOTERAPIA /PS - ENFERMARIAS": "fisioreabsoc2@gmail.com",
-        "FISIOTERAPIA - UTI": "fisioterapiasocorrao@gmail.com",
-        "FONOAUDIOLOGIA": "fonosocorrao2@yahoo.com",
-        "GERÊNCIA DE ENFERMAGEM": "gerenciadeenf.hcid@gmail.com",
-        "GERÊNCIA DA REABILITAÇÃO": "gerenciareab.hcid@gmail.com",
-        "GERENCIAMENTO DE RESÍDUOS": "residuos.hcid@gmail.com",
+        "CENTRAL INTERNA DE TRANSPORTE": "centraltransporte.hcid@gmail.com",
         "HOTELARIA": "hotelaria.hcid@gmail.com",
-        "LABORATÓRIO": "hcid.laboratorio@gmail.com",
-        "MANUTENÇÃO": "manutencao.hcid@gmail.com",
-        "MAQUEIROS": "centraltransporte.hcid@gmail.com",
-        "NAQH": "naqhsoc2@gmail.com",
-        "NCE": "nce.socorrao2@gmail.com",
-        "NEP": "nep.hcid@gmail.com",
-        "NEPEX": "nepexhcid@gmail.com",
-        "NSP": "nspsoc2@gmail.com",
-        "NIR": "coordenanirs2@gmail.com",
-        "NUTRIÇÃO": "nutricaohospitaldacidade@gmail.com",
-        "NVE": "nhe.hcid@gmail.com",
-        "ODONTOLOGIA": "robertapalacioferes@gmail.com",
-        "OUVIDORIA": "ouvidoriahcid@gmail.com",
-        "PARECER DE EXAMES": "coodsaet2026@gmail.com",
-        "PATRIMÔNIO": "patrimonio.hcid@gmail.com",
-        "PORTARIA": "portaria.hcid@gmail.com",
-        "PSICOLOGIA": "psicologia.hcid@gmail.com",
-        "RECURSOS HUMANOS": "setorpessoal.hcid@gmail.com",
-        "ROUPARIA": "rouparia.hcid@gmail.com",
-        "SAEEM": "saeem.hcid@gmail.com",
-        "SAME": "same25.hcid@gmail.com",
-        "SAET": "coodsaet2026@gmail.com",
-        "SADT": "sadthosp@gmail.com",
-        "SDM/VERMELHA - ENFERMAGEM": "salavermelhasdm@gmail.com",
-        "SERVIÇO SOCIAL": "servicosocialhcid@gmail.com",
-        "SETOR DE IMAGEM": "sadt.hosp@gmail.com",
-        "TECNOLOGIA DA INFORMAÇÃO": "suporteti.hcid@gmail.com",
-        "TERAPIA OCUPACIONAL": "terapiaocupacional.hcid@gmail.com",
+        "ALA F (UTI A)": "utihcid@gmail.com",
+        "ECP - EQUIPE DE CUIDADOS COM A PELE": "carlosemilioecp@gmail.com",
+        "AUXILIAR DE TRANSPORTE": "centraltransporte.hcid@gmail.com",
         "TRANSPORTE EXTERNO": "centraltransporte.hcid@gmail.com",
-        "CENTRAL DE TRANSPORTE INTRA HOSPITALAR": "centraltransporte.hcid@gmail.com",
-        "UNIDADE SENTINELA": "unidadesentinela@gmail.com",
-        "UTI A - MÉDICOS": "pedrohfrota@gmail.com",
-        "UTI B - MÉDICOS": "livia.goreth@ufma.br",
-        "UTI C - MÉDICOS": "hugogama19@hotmail.com",
-        "ORTOPEDIA - MÉDICOS": "abraaojunior@hotmail.com",
-        "PRONTO SOCORRO - MÉDICOS": "gustavo1422@hotmail.com",
-        "ALA A - MÉDICOS": "kledsonmarques10@gmail.com",
-        "ALA B - MÉDICOS": "aliomarcamaradecarvalho@gmail.com",
-        "CENTRO CIRÚRGICO - MÉDICOS": "felipeabreu805@gmail.com",
-        "CARDIOLOGIA - MÉDICOS": "jordach.xerez@gmail.com",
-        "ANESTESISTAS - MÉDICO": "rafaelcbarrosneto@yahoo.com.br",
-        "XEROX/REPROGRAFIA": "centraldecopias.hcid@gmail.com",
+        "FISIOTERAPIA": "fisioreabsoc2@gmail.com",
+        "TERAPIA OCUPACIONAL": "terapiaocupacional.hcid@gmail.com",
+        "SERVIÇO SOCIAL": "servicosocialhcid@gmail.com",
     }
     
     for chave, email in emails.items():
-        if chave in nome or nome in chave:
+        if chave == nome or chave in nome or nome in chave:
             return email
     
     return "nspsoc2@gmail.com"
+
+# ✅ BUSCA GESTOR — Baseado no SETOR NOTIFICADO
+def buscar_gestor(setor_notificado):
+    if not setor_notificado or str(setor_notificado).strip() == "":
+        return ""
+    
+    nome = str(setor_notificado).strip().upper()
+    
+    gestores = {
+        "ALA D": "GESTOR DE ENFERMAGEM",
+        "AGÊNCIA TRANSFUSIONAL": "GESTOR DE AGÊNCIA",
+        "ALA A": "GESTOR DE ENFERMAGEM",
+        "ALA F (UTI B)": "GESTOR DE ENFERMAGEM",
+        "ALA I": "GESTOR DE ENFERMAGEM",
+        "ALA F (UTI C)": "GESTOR DE ENFERMAGEM",
+        "ALA G": "GESTOR DE ENFERMAGEM",
+        "SALA VERMELHA": "GESTOR DE ENFERMAGEM",
+        "ALA J": "GESTOR DE ENFERMAGEM",
+        "FARMÁCIA": "GESTOR DE FARMÁCIA",
+        "CENTRAL INTERNA DE TRANSPORTE": "GESTOR DA CENTRAL INTERNA DE TRANSPORTE",
+        "HOTELARIA": "GESTOR DE HOTELARIA",
+        "ALA F (UTI A)": "GESTOR DE ENFERMAGEM",
+        "ECP - EQUIPE DE CUIDADOS COM A PELE": "GESTOR DA ECP",
+        "AUXILIAR DE TRANSPORTE": "GESTOR DA CENTRAL INTERNA DE TRANSPORTE",
+        "FISIOTERAPIA": "GESTOR DE FISIOTERAPIA",
+        "TERAPIA OCUPACIONAL": "GESTOR DE TERAPIA",
+        "SERVIÇO SOCIAL": "GESTOR DE SERVIÇO SOCIAL",
+    }
+    
+    for chave, gestor in gestores.items():
+        if chave == nome or chave in nome or nome in chave:
+            return gestor
+    
+    return ""
 
 def substituir_texto_no_docx(doc, dados):
     for p in doc.paragraphs:
@@ -164,12 +141,12 @@ def gerar_docx(dados):
         st.error(f"Erro ao gerar arquivo: {str(e)}")
         return None
 
-def contar_enviados(df):
+def contar_enviados(df, coluna_status=1):
     qtd = 0
     for _, linha in df.iterrows():
-        if len(linha) <= 1:
+        if len(linha) <= coluna_status:
             continue
-        status = tratar_texto(linha.iloc[1]).upper()
+        status = tratar_texto(linha.iloc[coluna_status]).upper()
         if status == "ENVIADO":
             qtd += 1
     return qtd
@@ -195,8 +172,8 @@ if arquivo_excel:
         st.subheader("RESUMO GERAL")
         col1, col2, col3 = st.columns(3)
         col1.metric("Total de Memorandos", total)
-        col2.metric("Já Enviados", enviados)
-        col3.metric("Pendentes", pendentes)
+        col2.metric("✅ Já Enviados", enviados)
+        col3.metric("⏳ Pendentes", pendentes)
         st.info(f"{total} - {enviados} = {pendentes} memorandos pendentes")
         st.divider()
         
@@ -207,6 +184,11 @@ if arquivo_excel:
         qtd_processados = 0
         
         for idx, linha in df.iterrows():
+            # ✅ IGNORAR LINHA SE SETOR NOTIFICADO ESTIVER VAZIO
+            setor_notificado = tratar_texto(linha.iloc[14]) if len(linha) > 14 else ""
+            if not setor_notificado:
+                continue  # ← PULA LINHA VAZIA COMPLETAMENTE
+            
             num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
             if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
                 continue
@@ -214,6 +196,10 @@ if arquivo_excel:
             nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else ""
             if not nome_paciente:
                 continue
+            
+            # ✅ VERIFICAR STATUS — SE ENVIADO, MARCAR TARJADO
+            status = tratar_texto(linha.iloc[1]).upper() if len(linha) > 1 else ""
+            enviado = (status == "ENVIADO")
             
             data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
             data_notificacao = formatar_data_sem_hora(linha.iloc[3]) if len(linha) > 3 else ""
@@ -237,10 +223,9 @@ if arquivo_excel:
                 elif "NOITE" in turno:
                     noite = "☑"
             
-            gestor = tratar_texto(linha.iloc[13]) if len(linha) > 13 else ""
-            setor_destino = tratar_texto(linha.iloc[14]) if len(linha) > 14 else ""
-            
-            email_destino = buscar_email_setor(setor_notificante)
+            # ✅ BUSCA GESTOR E EMAIL PELO SETOR NOTIFICADO
+            gestor = buscar_gestor(setor_notificado)
+            email_destino = buscar_email_setor(setor_notificado)
             
             qtd_processados += 1
             
@@ -253,10 +238,22 @@ if arquivo_excel:
             else:
                 saudacao = "Boa noite,"
             
-            with st.expander(f"Notificação {num_notif} — {nome_paciente}", expanded=True):
+            # ✅ TÍTULO — RISCADO SE JÁ ENVIADO
+            if enviado:
+                titulo_memo = f"~~✅ Notificação {num_notif} — {nome_paciente}~~  **ENVIADO**"
+            else:
+                titulo_memo = f"📋 Notificação {num_notif} — {nome_paciente}"
+            
+            with st.expander(titulo_memo, expanded=not enviado):
+                if enviado:
+                    st.success("✅ Este memorando já foi enviado!")
+                    st.divider()
+                
                 st.write(f"📅 Data de Emissão: {data_extenso}")
                 st.write(f"📅 Data da Ocorrência: {data_ocorrencia} | Notificação: {data_notificacao}")
                 st.write(f"📍 Local: {localizacao} | Setor Notificante: {setor_notificante}")
+                st.write(f"📤 **Setor Notificado:** {setor_notificado}")
+                st.write(f"👤 **Gestor:** {gestor}")
                 st.write(f"⚠️ Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
                 st.write(f"👤 Paciente: {nome_paciente} | Leito: {leito}")
                 st.write(f"🔄 Sugestão: {sugestao}")
@@ -286,22 +283,21 @@ nspsoc2@gmail.com
                     "{{numero_memorando}}": f"NSP Nº {num_notif}/{ano_atual}",
                     "{{notificacao_n}}": num_notif,
                     "{{gestor}}": gestor,
-                    "{{setor}}": setor_destino,
+                    "{{setor_notificado}}": setor_notificado,
+                    "{{data_envio}}": data_extenso,
                     "{{data_ocorrencia}}": data_ocorrencia,
                     "{{data_notificacao}}": data_notificacao,
-                    "{{data_extenso}}": data_extenso,
-                    "{{m_manha}}": manha,
-                    "{{t_tarde}}": tarde,
-                    "{{n_noite}}": noite,
+                    "{{m}}": manha,
+                    "{{t}}": tarde,
+                    "{{n}}": noite,
                     "{{localizacao}}": localizacao,
                     "{{tipo_incidente}}": tipo_incidente,
                     "{{classificacao_incidente}}": classificacao_incidente,
                     "{{descricao_notificacao}}": descricao_notificacao,
                     "{{nome_paciente}}": nome_paciente,
                     "{{leito}}": leito,
-                    "{{setor_not}}": setor_notificante,
+                    "{{setor_notificante}}": setor_notificante,
                     "{{sugestao}}": sugestao,
-                    "{{email_destino}}": email_destino,
                 }
                 
                 arquivo_pronto = gerar_docx(dados_docx)
@@ -311,7 +307,10 @@ nspsoc2@gmail.com
                         data=arquivo_pronto,
                         file_name=f"NSP_Nº {num_notif}_{ano_atual}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"botao_{num_notif}_{idx}"
+                        key=f"botao_{num_notif}_{idx}",
+                        disabled=enviado
                     )
     except Exception as e:
         st.error(f"Erro ao processar planilha: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
