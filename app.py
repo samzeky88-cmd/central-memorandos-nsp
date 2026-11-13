@@ -312,8 +312,14 @@ if arquivo_excel:
                         "{{sugestao}}": sugestao
                     }
                     
-                    arquivo_pronto = gerar_docx(dados_docx)
-                    if arquivo_pronto:
-                        st.download_button(
-                            label="📄 Baixar Memorando",
-                            data=
+                  arquivo_pronto = gerar_docx(dados_docx)
+                  arquivo_pronto = gerar_docx(dados_docx)
+if arquivo_pronto:
+    st.download_button(
+        label="📄 Baixar Memorando",
+        data=arquivo_pronto,
+        file_name=f"NSP_Nº {num_notif}_{ano_atual}.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+except Exception as e:
+    st.error(f"Erro ao processar planilha: {str(e)}")
