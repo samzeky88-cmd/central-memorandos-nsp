@@ -332,7 +332,7 @@ nspsoc2@gmail.com
                     with st.expander("Texto do E-mail"):
                         st.text(corpo_email.strip())
                     
-                    dados_docx = {
+                                        dados_docx = {
                         "{{numero_memorando}}": num_memorando,
                         "{{notificacao_n}}": num_notificacao,
                         "{{gestor}}": gestor,
@@ -342,4 +342,24 @@ nspsoc2@gmail.com
                         "{{data_ocorrencia}}": data_ocorrencia,
                         "{{data_notificacao}}": data_notificacao,
                         "{{m}}": m,
-                        "{{t}}":
+                        "{{t}}": t,
+                        "{{n}}": n,
+                        "{{localizacao}}": localizacao,
+                        "{{tipo_incidente}}": tipo_incidente,
+                        "{{classificacao_incidente}}": classificacao_incidente,
+                        "{{descricao_notificacao}}": descricao_notificacao,
+                        "{{nome_paciente}}": nome_paciente,
+                        "{{leito}}": leito,
+                        "{{sugestao}}": sugestao,
+                    }
+                    
+                    arquivo_pronto = gerar_docx(dados_docx)
+                    if arquivo_pronto:
+                        st.download_button(
+                            label="📄 Baixar Memorando",
+                            data=arquivo_pronto,
+                            file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"download_pend_{num_notificacao}_{num_memorando}_{idx}"
+                        )
+
