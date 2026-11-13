@@ -299,7 +299,7 @@ if arquivo_excel:
                     corpo_email += "ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de Word "
                     corpo_email += "ou PDF para arquivamento de respostas conforme rotina institucional. "
                     corpo_email += "Não serão aceitas mensagens via e-mail sem arquivo como resposta.\n\n"
-                    corpo_email += "Atenciosamente,\n\nEzequias S. Santos\nAgente Administrativo - NAQH & NSP\nnspsoc2@gmail.com"
+                    corpo_email += "Atenciosamente,\n\nFabrício S. Santos\nNúcleo de Segurança do Paciente\nnspsoc2@gmail.com"
                     
                     with st.expander("Texto do E-mail"):
                         st.text(corpo_email)
@@ -311,9 +311,10 @@ if arquivo_excel:
                         "{{setor}}": b["setor"],
                         "{{data_ocorrencia}}": data_ocorrencia,
                         "{{data_notificacao}}": data_notificacao,
+                        "{{data_envio}}": data_extenso,
                         "{{m}}": m_manha,
                         "{{t}}": m_tarde,
                         "{{n}}": m_noite,
                         "{{localizacao}}": localizacao,
                         "{{tipo_incidente}}": tipo_incidente,
-                        "{{
+                       
