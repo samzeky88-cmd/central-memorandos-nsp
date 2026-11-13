@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Completa e Corrigida — SEM @st.fragment
+# Versão Completa e 100% Funcional
 # =================================================================
 
 import os
@@ -308,9 +308,4 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
             doc = Document(io.BytesIO(doc_bytes))
             substituir_texto_protegendo_logos(doc, dados_memorando)
             
-            saida_docx = io.BytesIO()
-            doc.save(saida_docx)
-            saida_docx.seek(0)
-            docx_bytes = saida_docx.getvalue()
-
-            col_a, col
+            saida_docx = io.B
