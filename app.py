@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Final: Lista Completa de E-mails + Contagem Correta
+# Versão Final Completa: Total Fixo 964 + Cálculo Automático
 # =================================================================
 
 import os
@@ -30,7 +30,7 @@ LISTA_SETORES = [
     ("13. ALA L - ENFERMAGEM", "alalortopedia.hcid@gmail.com"),
     ("14. ALMOXARIFADO", "almoxarifadosocorrao2@gmail.com"),
     ("15. AMBULATÓRIO", "ambulatorio.hcid@gmail.com"),
-    ("16. ASSESSORIA JURÍDICA", "fernandoacmoares.advogado@gmail.com"),
+    ("16. ASSESSORIA JURÍDICA", "fernandoacmoraes.advogado@gmail.com"),
     ("17. CAC", "cac.socorrao2@gmail.com"),
     ("18. CENTRAL DE CÓPIAS", "centraldecopias.hcid@gmail.com"),
     ("19. CCIH", "ccih.hcid@gmail.com"),
@@ -38,16 +38,16 @@ LISTA_SETORES = [
     ("21. COMISSÃO DE ÓBITOS", "comissaodeobito.hdacidade@gmail.com"),
     ("22. COMISSÃO DE ÉTICA EM ENFERMAGEM", "comissaodeetica.soc2@gmail.com"),
     ("23. CME", "cmeesterilizacao@gmail.com"),
-    ("24. COMISSÃO DE ÉTICA MÉDICA", "cmeesterilizacao@gmail.com"),
-    ("25. COMISSÃO DE CUIDADOS PALIATIVOS", "utihcid@gmail.com"),
-    ("26. COMISSÃO DE REVISÃO DE PRONTUÁRIO", "documentos.soc2@gmail.com"),
-    ("27. CENTRAL DE TRANSPORTE INTRA HOSPITALAR", "documentos.soc2@gmail.com"),
+    ("24. COMISSÃO DE ÉTICA MÉDICA", ""),
+    ("25. COMISSÃO DE CUIDADOS PALIATIVOS", ""),
+    ("26. COMISSÃO DE REVISÃO DE PRONTUÁRIO", ""),
+    ("27. CENTRAL DE TRANSPORTE INTRA HOSPITALAR", ""),
     ("28. DOCUMENTOS INSTITUCIONAIS (NAQH)", "documentos.soc2@gmail.com"),
     ("29. ECP", "carlosemilioecp@gmail.com"),
     ("30. ENDOSCOPIA", "endoscopiasoc2@gmail.com"),
     ("31. EDOT", "edot.hcid@gmail.com"),
     ("32. EMTN", "emtnhospitaldacidade@gmail.com"),
-    ("33. ESCALAS", "escalas.hcid25@gmail.com"),
+    ("33. ESCALAS", "escalahcid25@gmail.com"),
     ("34. FARMÁCIA", "farmacia.hcid@gmail.com"),
     ("35. FARMACOVIGILÂNCIA", "farmacovigilanciahcid@gmail.com"),
     ("36. FATURAMENTO", "contasmedicassocorrao2@gmail.com"),
@@ -62,42 +62,45 @@ LISTA_SETORES = [
     ("45. MANUTENÇÃO", "manutencao.hcid@gmail.com"),
     ("46. MAQUEIROS", "centraltransporte.hcid@gmail.com"),
     ("47. NAQH", "naqhsoc2@gmail.com"),
-    ("48. NCE", "ce.socorrao2@gmail.com"),
+    ("48. NCE", "nce.socorrao2@gmail.com"),
     ("49. NEP", "nep.hcid@gmail.com"),
     ("50. NEPEX", "nepexhcid@gmail.com"),
     ("51. NIR", "coordenanirs2@gmail.com"),
     ("52. NSP", "nspsoc2@gmail.com"),
     ("53. NUTRIÇÃO", "nutricaohospitaldacidade@gmail.com"),
     ("54. NVE", "nhe.hcid@gmail.com"),
-    ("55. ODONTOLOGIA", "robertapalacioferes@gmail.com"),
-    ("56. OUVIDORIA", "ouvidoriahcid@gmail.com"),
-    ("57. PARECER DE EXAMES", "coodsaet2026@gmail.com"),
-    ("58. PATRIMÔNIO", "patrimonio.hcid@gmail.com"),
-    ("59. PORTARIA", "portaria.hcid@gmail.com"),
-    ("60. RECURSOS HUMANOS", "setorpessoal.hcid@gmail.com"),
-    ("61. ROUPARIA", "rouparia.hcid@gmail.com"),
-    ("62. SAEEM", "saeem.hcid@gmail.com"),
-    ("63. SAME", "same25.hcid@gmail.com"),
-    ("64. SAET", "coodsaet2026@gmail.com"),
-    ("65. SADT", "sadthosp@gmail.com"),
-    ("66. SDM/VERMELHA - ENFERMAGEM", "salavermelhasdm@gmail.com"),
-    ("67. SERVIÇO SOCIAL", "servicosocialhcid@gmail.com"),
-    ("68. SETOR DE IMAGEM", "sadt.hosp@gmail.com"),
-    ("69. TECNOLOGIA DA INFORMAÇÃO", "suporteti.hcid@gmail.com"),
-    ("70. TERAPIA OCUPACIONAL", "terapiaocupacional.hcid@gmail.com"),
-    ("71. TRANSPORTE EXTERNO", "centraltransporte.hcid@gmail.com"),
-    ("72. UNIDADE SENTINELA", "unidadesentinela@gmail.com"),
-    ("73. UTI A - MÉDICOS", "pedrohfrota@gmail.com"),
-    ("74. UTI B - MÉDICOS", "livia.goreth@ufma.br"),
-    ("75. UTI C - MÉDICOS", "hugogama19@hotmail.com"),
-    ("76. ORTOPEDIA - MÉDICOS", "abraaojunior@hotmail.com"),
-    ("77. PRONTO SOCORRO - MÉDICOS", "gustavo1422@hotmail.com"),
-    ("78. ALA A - MÉDICOS", "kledsonmarques10@gmail.com"),
-    ("79. ALA B - MÉDICOS", "aliomarcamaradecarvalho@gmail.com"),
-    ("80. CENTRO CIRÚRGICO - MÉDICOS", "felipeabreu805@gmail.com"),
-    ("81. CARDIOLOGIA - MÉDICOS", "jordach.xerez@gmail.com"),
-    ("82. ANESTESISTAS - MÉDICO", "rafaelcbarrosneto@yahoo.com.br"),
-    ("83. XEROX/REPROGRAFIA", "centraldecopias.hcid@gmail.com"),
+    ("55. NHE", ""),
+    ("56. ODONTOLOGIA", "robertapalacioferes@gmail.com"),
+    ("57. OUVIDORIA", "ouvidoriahcid@gmail.com"),
+    ("58. PARECER DE EXAMES", "coodsaet2026@gmail.com"),
+    ("59. PATRIMÔNIO", "patrimonio.hcid@gmail.com"),
+    ("60. PORTARIA", "portaria.hcid@gmail.com"),
+    ("61. PSICOLOGIA", "psicologia.hcid@gmail.com"),
+    ("62. RECURSOS HUMANOS", "setorpessoal.hcid@gmail.com"),
+    ("63. ROUPARIA", "rouparia.hcid@gmail.com"),
+    ("64. SAEEM", "saeem.hcid@gmail.com"),
+    ("65. SAME", "same25.hcid@gmail.com"),
+    ("66. SAET", "coodsaet2026@gmail.com"),
+    ("67. SADT", "sadthosp@gmail.com"),
+    ("68. SDM/VERMELHA - ENFERMAGEM", "salavermelhasdm@gmail.com"),
+    ("69. SERVIÇO SOCIAL", "servicosocialhcid@gmail.com"),
+    ("70. SETOR DE IMAGEM", "sadt.hosp@gmail.com"),
+    ("71. TECNOLOGIA DA INFORMAÇÃO", "suporteti.hcid@gmail.com"),
+    ("72. TERAPIA OCUPACIONAL", "terapiaocupacional.hcid@gmail.com"),
+    ("73. TRANSPORTE EXTERNO", "centraltransporte.hcid@gmail.com"),
+    ("74. UNIDADE SENTINELA", "unidadesentinela@gmail.com"),
+    ("75. UTI A - MÉDICOS", "pedrohfrota@gmail.com"),
+    ("76. UTI B - MÉDICOS", "livia.goreth@ufma.br"),
+    ("77. UTI C - MÉDICOS", "hugogama19@hotmail.com"),
+    ("78. ORTOPEDIA - MÉDICOS", "abraaojunior@hotmail.com"),
+    ("79. ALA C - MÉDICOS", ""),
+    ("80. PRONTO SOCORRO - MÉDICOS", "gustavo1422@hotmail.com"),
+    ("81. ALA A - MÉDICOS", "kledsonmarques10@gmail.com"),
+    ("82. ALA B - MÉDICOS", "aliomarcamaradecarvalho@gmail.com"),
+    ("83. CENTRO CIRÚRGICO - MÉDICOS", "felipeabreu805@gmail.com"),
+    ("84. CARDIOLOGIA - MÉDICOS", "jordach.xerez@gmail.com"),
+    ("85. ANESTESISTAS - MÉDICO", "rafaelcbarrosneto@yahoo.com.br"),
+    ("86. XEROX/REPROGRAFIA", "centraldecopias.hcid@gmail.com"),
 ]
 
 df_setores = pd.DataFrame(LISTA_SETORES, columns=["SETOR", "E-MAIL"])
@@ -108,6 +111,11 @@ df_setores = df_setores[df_setores["E-MAIL"].str.strip() != ""].reset_index(drop
 # =================================================================
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 aba_processar, aba_estatisticas = st.tabs(["📝 Lista de Memorandos", "📊 Estatísticas"])
+
+# =================================================================
+# 📌 VALOR FIXO — TOTAL GERAL DE MEMORANDOS
+# =================================================================
+TOTAL_GERAL_MEMORANDOS = 964  # ✅ Seu número da coluna AN
 
 # =================================================================
 # 🛠️ FUNÇÕES AUXILIARES
@@ -272,35 +280,18 @@ def gerar_docx(dados):
         return None
 
 # =================================================================
-# 📊 COLETAR TODOS OS MEMORANDOS — CONTAGEM REAL
+# 📊 COLETAR MEMORANDOS ENVIADOS
 # =================================================================
-def coletar_todos_memorandos(df):
-    todos_memorandos = []
+def contar_enviados(df):
+    qtd_enviados = 0
     for _, linha in df.iterrows():
         status = tratar_texto(linha.iloc[1]) if len(linha) > 1 else ""
-        dt_notif = formatar_data_br(linha.iloc[3]) if len(linha) > 3 else ""
-        
-        for g_col, s_col, m_col in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
-            num_memo = limpar_numero(linha.iloc[m_col]) if m_col < len(linha) else ""
-            setor = tratar_texto(linha.iloc[s_col]) if s_col < len(linha) else ""
-            
-            if num_memo and num_memo != "" and "Nº MEMO" not in num_memo:
-                data_obj = None
-                try:
-                    if dt_notif:
-                        data_obj = pd.to_datetime(dt_notif, dayfirst=True)
-                except:
-                    pass
-                
-                todos_memorandos.append({
-                    "numero_memo": num_memo,
-                    "setor": setor,
-                    "status": status.upper() if status else "PENDENTE",
-                    "data": data_obj,
-                    "notificacao": limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
-                })
-    
-    return pd.DataFrame(todos_memorandos)
+        if status.upper() == "ENVIADO":
+            for g_col, s_col, m_col in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
+                num_memo = limpar_numero(linha.iloc[m_col]) if m_col < len(linha) else ""
+                if num_memo and num_memo != "" and "Nº MEMO" not in num_memo:
+                    qtd_enviados += 1
+    return qtd_enviados
 
 # =================================================================
 # 📑 ABA 1 — LISTA DE MEMORANDOS
@@ -313,24 +304,32 @@ with aba_processar:
     if arquivo_excel:
         try:
             df = pd.read_excel(arquivo_excel, engine="openpyxl")
-            df_memos = coletar_todos_memorandos(df)
             
-            # ✅ CONTAGEM CORRETA — APENAS DE MEMORANDOS VÁLIDOS
-            total_memorandos = len(df_memos)
-            enviados = len(df_memos[df_memos["status"] == "ENVIADO"])
+            # ✅ CÁLCULO: Total(964) − Enviados = Pendentes
+            enviados = contar_enviados(df)
+            total_memorandos = TOTAL_GERAL_MEMORANDOS
             pendentes = total_memorandos - enviados
             
             st.subheader("📊 Resumo — Por Memorando")
             col1, col2, col3 = st.columns(3)
-            col1.metric("📋 Total de Memorandos", total_memorandos)
+            col1.metric("📋 Total Geral de Memorandos", total_memorandos)
             col2.metric("✅ Já Enviados", enviados)
             col3.metric("⏳ Pendentes", pendentes)
             
-            st.info(f"Mostrando todos os {total_memorandos} memorandos — enviados aparecem riscados")
+            st.info(f"Total Geral: {total_memorandos} | Enviados: {enviados} | Pendentes: {pendentes}")
             
             data_extenso = data_por_extenso(data_selecionada)
             
-            # Processar TODAS as linhas
+            # Processar e exibir todos os memorandos
             for idx, linha in df.iterrows():
                 num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
+                # ✅ ERRO DE INDENTAÇÃO CORRIGIDO AQUI
                 if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
+                    continue
+                
+                nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else "Paciente"
+                if nome_paciente.upper() == "PACIENTE":
+                    continue
+                
+                dt_ocorr = formatar_data_br(linha.iloc[2]) if len(linha) > 2 else ""
+                dt_notif =
