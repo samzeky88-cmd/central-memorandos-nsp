@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Corrigida: 4 Blocos por Linha + E-mails + Texto Completo
+# Versão Corrigida: Acesso por Posição + 4 Blocos por Linha
 # =================================================================
 
 import os
@@ -152,9 +152,10 @@ def processar_bloco(linha, bloco_nome, idx, nome_paciente, data_extenso,
                     dt_ocorr, dt_notif, local, tipo,
                     classificacao, desc, leito, setor_notificante, sugestao, turno_bruto):
     
-    gestor = tratar_texto(linha[col_gestor]) if col_gestor < len(linha) else ""
-    setor_destino = tratar_texto(linha[col_setor]) if col_setor < len(linha) else ""
-    num_memo = limpar_numero(linha[col_memo]) if col_memo < len(linha) else ""
+    # ✅ CORRIGIDO: Usar .iloc[] para acessar por POSIÇÃO
+    gestor = tratar_texto(linha.iloc[col_gestor]) if col_gestor < len(linha) else ""
+    setor_destino = tratar_texto(linha.iloc[col_setor]) if col_setor < len(linha) else ""
+    num_memo = limpar_numero(linha.iloc[col_memo]) if col_memo < len(linha) else ""
     
     if not num_memo or num_memo == "" or num_memo.upper() == "Nº MEMO 01":
         return None
@@ -230,6 +231,11 @@ if arquivo_excel:
         st.success(f"✅ Planilha carregada — {len(df)} registro(s) encontrado(s)")
         data_extenso = data_por_extenso(data_selecionada)
         
+        # Mostrar colunas para conferência
+        with st.expander("🔍 Ver colunas da planilha"):
+            for i, nome in enumerate(df.columns):
+                st.write(f"Posição {i} → Coluna: {nome}")
+        
         for idx, linha in df.iterrows():
             num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
             if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
@@ -250,7 +256,7 @@ if arquivo_excel:
             sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
             turno_bruto = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
             
-            # 🧩 PROCESSAR OS 4 BLOCOS
+            # 🧩 PROCESSAR OS 4 BLOCOS — com .iloc[] corrigido
             bloco1 = processar_bloco(
                 linha, "Memorando 01", idx, nome_paciente, data_extenso,
                 13, 14, 15,
