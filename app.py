@@ -233,4 +233,3 @@ if arquivo_excel:
             data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
             data_notificacao = formatar_data_sem_hora(linha.iloc[3]) if len(linha) > 3 else ""
             turno = tratar_texto(linha.iloc[4]).upper() if len(linha) > 4 else ""
-            localizacao = tratar_texto(linha.iloc[5]) if len(linha) > 5 else ""
