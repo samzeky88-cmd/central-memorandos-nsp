@@ -278,41 +278,15 @@ if arquivo_excel:
                 gestor = buscar_gestor(setor_notificado)
                 email_destino = buscar_email_setor(setor_notificado)
                 
-                hora_atual = datetime.now().hour
-                if 6 <= hora_atual < 12:
-                    saudacao = "Bom dia,"
-                elif 12 <= hora_atual < 18:
-                    saudacao = "Boa tarde,"
-                else:
-                    saudacao = "Boa noite,"
-                
-                titulo_memo = f"📋 Notificação Nº {num_notificacao} — {nome_paciente}"
-                
-                with st.expander(titulo_memo, expanded=True):
-                    marcado = st.checkbox(
-                        "✅ Já enviei este memorando",
-                        value=False,
-                        key=f"check_pend_{num_notificacao}_{num_memorando}_{idx}"
-                    )
-                    
-                    if marcado:
-                        df.at[idx, 'Status'] = 'ENVIADO'
-                        st.success("✅ Movido para a aba ENVIADOS! Salve a planilha para manter a alteração.")
-                    
-                    st.divider()
-                    
-                    st.write(f"📅 Data de Emissão: {data_extenso}")
-                    st.write(f"📅 Data da Ocorrência: {data_ocorrencia} | Notificação: {data_notificacao}")
-                    st.write(f"📍 Local: {localizacao}")
-                    st.write(f"🏛️ Setor Notificante: {setor_notificante}")
-                    st.write(f"📤 Setor Notificado: {setor_notificado}")
-                    st.write(f"👤 Gestor: {gestor}")
-                    st.write(f"⚠️ Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
-                    st.write(f"👤 Paciente: {nome_paciente} | Leito: {leito}")
-                    st.write(f"💡 Sugestão: {sugestao}")
-                    st.write(f"📧 E-mail para envio: {email_destino}")
-                    
-                                       corpo_email = f"""
+                                  hora_atual = datetime.now().hour
+                    if 6 <= hora_atual < 12:
+                        saudacao = "Bom dia,"
+                    elif 12 <= hora_atual < 18:
+                        saudacao = "Boa tarde,"
+                    else:
+                        saudacao = "Boa noite,"
+
+                    corpo_email = f"""
 {saudacao} Prezado(a),
 
 Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
@@ -353,4 +327,12 @@ nspsoc2@gmail.com
                         "{{sugestao}}": sugestao,
                     }
 
-
+                    arquivo_pronto = gerar_docx(dados_docx)
+                    if arquivo_pronto:
+                        st.download_button(
+                            label="📄 Baixar Memorando",
+                            data=arquivo_pronto,
+                            file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"download_pend_{num_notificacao}_{num_memorando}_{idx}"
+                        )
