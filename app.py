@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão: Leitura de 4 Blocos por Linha + E-mails + Texto Completo
+# Versão Corrigida: 4 Blocos por Linha + E-mails + Texto Completo
 # =================================================================
 
 import os
@@ -45,9 +45,7 @@ LISTA_SETORES = [
     ("SETOR DE IMAGEM", "sadt.hosp@gmail.com"),
     ("TERAPIA OCUPACIONAL", "terapiaocupacional.hcid@gmail.com"),
     ("EMTN - EQUIPE", "emtnhospitaldacidade@gmail.com"),
-    ("FISIOTERAPIA", "fisioterapiasocorrao@gmail.com"),
     ("SOM - EQUIPE DE CUIDADOS MÉDICA", "sadm.hcid@gmail.com"),
-    ("SADT - SETOR DE IMAGEM", "sadt.hosp@gmail.com"),
 ]
 
 df_setores = pd.DataFrame(LISTA_SETORES, columns=["SETOR", "E-MAIL"])
@@ -122,7 +120,6 @@ def buscar_email_setor(nome_setor):
 
 def montar_corpo_email(num_memo, num_notif, gestor, setor, nome_paciente, data_envio):
     assunto = f"NOTIFICAÇÃO DE INCIDENTE — MEMO Nº {num_memo} / NOTIF Nº {num_notif}"
-    
     corpo = f"""
 Bom Dia / Boa Tarde, Prezado(a) {gestor}!
 
@@ -150,24 +147,21 @@ E-mail: nspsoc2@gmail.com
 # =================================================================
 # 📄 FUNÇÃO DE PROCESSAR 1 BLOCO DE MEMORANDO
 # =================================================================
-def processar_bloco(linha, bloco_nome, idx, nome_paciente, data_extenso, 
-                    col_gestor, col_setor, col_memo, 
-                    dt_ocorr="", dt_notif="", local="", tipo="", 
-                    classificacao="", desc="", leito="", setor_notificante="", 
-                    sugestao="", turno_bruto=""):
+def processar_bloco(linha, bloco_nome, idx, nome_paciente, data_extenso,
+                    col_gestor, col_setor, col_memo,
+                    dt_ocorr, dt_notif, local, tipo,
+                    classificacao, desc, leito, setor_notificante, sugestao, turno_bruto):
     
     gestor = tratar_texto(linha[col_gestor]) if col_gestor < len(linha) else ""
     setor_destino = tratar_texto(linha[col_setor]) if col_setor < len(linha) else ""
     num_memo = limpar_numero(linha[col_memo]) if col_memo < len(linha) else ""
     
-    # Pular se não houver número de memorando
     if not num_memo or num_memo == "" or num_memo.upper() == "Nº MEMO 01":
         return None
     
     num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
     email_destino = buscar_email_setor(setor_destino)
     
-    # Processar turno
     if pd.isna(turno_bruto):
         m, t, n = "", "", ""
     else:
@@ -236,13 +230,7 @@ if arquivo_excel:
         st.success(f"✅ Planilha carregada — {len(df)} registro(s) encontrado(s)")
         data_extenso = data_por_extenso(data_selecionada)
         
-        # Mostrar mapeamento das colunas para conferir
-        with st.expander("🔍 Ver colunas da planilha"):
-            for i, nome in enumerate(df.columns):
-                st.write(f"Coluna {i} → {nome}")
-        
         for idx, linha in df.iterrows():
-            # Dados comuns a TODOS os blocos da mesma linha
             num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
             if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
                 continue
@@ -251,7 +239,6 @@ if arquivo_excel:
             if nome_paciente.upper() == "PACIENTE":
                 continue
             
-            # Dados que se repetem em todos os memorandos da mesma linha
             dt_ocorr = formatar_data_br(linha.iloc[2]) if len(linha) > 2 else ""
             dt_notif = formatar_data_br(linha.iloc[3]) if len(linha) > 3 else ""
             local = tratar_texto(linha.iloc[5]) if len(linha) > 5 else ""
@@ -263,32 +250,35 @@ if arquivo_excel:
             sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
             turno_bruto = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
             
-            # 🧩 PROCESSAR OS 4 BLOCOS — cada um com suas colunas
-            # Bloco 1: Colunas N(13)=Gestor01, O(14)=Setor01, P(15)=Memo01
-            bloco1 = processar_bloco(linha, "Memorando 01", idx, nome_paciente, data_extenso,
-                                     col_gestor=13, col_setor=14, col_memo=15,
-                                     dt_ocorr, dt_notif, local, tipo, classificacao,
-                                     desc, leito, setor_notificante, sugestao, turno_bruto)
+            # 🧩 PROCESSAR OS 4 BLOCOS
+            bloco1 = processar_bloco(
+                linha, "Memorando 01", idx, nome_paciente, data_extenso,
+                13, 14, 15,
+                dt_ocorr, dt_notif, local, tipo, classificacao,
+                desc, leito, setor_notificante, sugestao, turno_bruto
+            )
             
-            # Bloco 2: Colunas R(17)=Gestor02, S(18)=Setor02, T(19)=Memo02
-            bloco2 = processar_bloco(linha, "Memorando 02", idx, nome_paciente, data_extenso,
-                                     col_gestor=17, col_setor=18, col_memo=19,
-                                     dt_ocorr, dt_notif, local, tipo, classificacao,
-                                     desc, leito, setor_notificante, sugestao, turno_bruto)
+            bloco2 = processar_bloco(
+                linha, "Memorando 02", idx, nome_paciente, data_extenso,
+                17, 18, 19,
+                dt_ocorr, dt_notif, local, tipo, classificacao,
+                desc, leito, setor_notificante, sugestao, turno_bruto
+            )
             
-            # Bloco 3: Colunas W(22)=Gestor03, X(23)=Setor03, Y(24)=Memo03
-            bloco3 = processar_bloco(linha, "Memorando 03", idx, nome_paciente, data_extenso,
-                                     col_gestor=22, col_setor=23, col_memo=24,
-                                     dt_ocorr, dt_notif, local, tipo, classificacao,
-                                     desc, leito, setor_notificante, sugestao, turno_bruto)
+            bloco3 = processar_bloco(
+                linha, "Memorando 03", idx, nome_paciente, data_extenso,
+                22, 23, 24,
+                dt_ocorr, dt_notif, local, tipo, classificacao,
+                desc, leito, setor_notificante, sugestao, turno_bruto
+            )
             
-            # Bloco 4: Colunas AA(26)=Gestor04, AB(27)=Setor04, AC(28)=Memo04
-            bloco4 = processar_bloco(linha, "Memorando 04", idx, nome_paciente, data_extenso,
-                                     col_gestor=26, col_setor=27, col_memo=28,
-                                     dt_ocorr, dt_notif, local, tipo, classificacao,
-                                     desc, leito, setor_notificante, sugestao, turno_bruto)
+            bloco4 = processar_bloco(
+                linha, "Memorando 04", idx, nome_paciente, data_extenso,
+                26, 27, 28,
+                dt_ocorr, dt_notif, local, tipo, classificacao,
+                desc, leito, setor_notificante, sugestao, turno_bruto
+            )
             
-            # Coletar apenas os blocos que tem número de memorando
             blocos_ativos = [b for b in [bloco1, bloco2, bloco3, bloco4] if b is not None]
             
             with st.expander(f"📋 Notificação {num_notif} — {nome_paciente} — {len(blocos_ativos)} memorando(s)"):
@@ -303,7 +293,6 @@ if arquivo_excel:
                     else:
                         st.warning("⚠️ E-mail não encontrado")
                     
-                    # Botão de download
                     docx_bytes = gerar_docx(b['dados_docx'], f"MEMO_{b['num_memo']}_NOTIF_{num_notif}")
                     if docx_bytes:
                         st.download_button(
@@ -314,6 +303,13 @@ if arquivo_excel:
                             key=f"doc_{idx}_{b['bloco']}"
                         )
                     
-                    # Assunto e corpo do e-mail
                     st.write("**✉️ Assunto do E-mail:**")
-                    st.code(b['assunto_email'], language=None
+                    st.code(b['assunto_email'], language=None)
+                    st.write("**📝 Corpo do E-mail:**")
+                    st.text_area("", b['corpo_email'], height=200, key=f"email_{idx}_{b['bloco']}")
+    
+    except Exception as e:
+        st.error(f"❌ Erro ao processar a planilha: {str(e)}")
+        st.exception(e)
+else:
+    st.info("👆 Faça upload da sua planilha Excel (.xlsx) para começar")
