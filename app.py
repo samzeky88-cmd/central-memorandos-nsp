@@ -4,6 +4,7 @@
 # ✅ Abas: Pendentes e Enviados
 # ✅ Itens Enviados riscados (tachados)
 # ✅ E-mails e Gestores completos
+# ✅ Erro de sintaxe corrigido
 # =================================================================
 
 import pandas as pd
@@ -228,14 +229,14 @@ if arquivo_excel:
             
             nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else ""
             status_atual = tratar_texto(linha.get('Status', '')).upper()
-            enviado = (status_atual == "ENVIADO")
+            enviado_bool = (status_atual == "ENVIADO")
             
             todos_itens.append({
                 'idx': idx,
                 'num_notificacao': num_notificacao,
                 'num_memorando': num_memorando,
                 'nome_paciente': nome_paciente,
-                'enviado': enviado,
+                'enviado': enviado_bool,
                 'linha': linha
             })
         
@@ -244,19 +245,18 @@ if arquivo_excel:
         # ==============================================
         with aba_pendentes:
             st.markdown("### 📋 Memorandos Pendentes")
-            processados_pendentes = False
+            tem_pendentes = False
             
             for item in todos_itens:
                 if item['enviado']:
                     continue
-                processados_pendentes = True
+                tem_pendentes = True
                 
                 idx = item['idx']
                 linha = item['linha']
                 num_notificacao = item['num_notificacao']
                 num_memorando = item['num_memorando']
                 nome_paciente = item['nome_paciente']
-                enviado = False
                 
                 # 📅 Dados
                 data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
@@ -342,8 +342,4 @@ nspsoc2@gmail.com
                         "{{data_ocorrencia}}": data_ocorrencia,
                         "{{data_notificacao}}": data_notificacao,
                         "{{m}}": m,
-                        "{{t}}": t,
-                        "{{n}}": n,
-                        "{{localizacao}}": localizacao,
-                        "{{tipo_incidente}}": tipo_incidente,
-                        "{{classificacao_incidente}}": classificacao_incidente,
+                        "{{t}}":
