@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Final Completa e Sem Erros
+# Versão: Setores Corrigidos + Texto do E-mail Atualizado
 # =================================================================
 
 import pandas as pd
@@ -15,7 +15,7 @@ from docx import Document
 TOTAL_GERAL_MEMORANDOS = 964
 
 # =================================================================
-# 📚 LISTA COMPLETA DE E-MAILS — 86 Setores
+# 📚 LISTA COMPLETA DE E-MAILS — CORRIGIDA E ATUALIZADA
 # =================================================================
 LISTA_SETORES = [
     ("1. DIREÇÃO", "direcao.hospitaldacidade@gmail.com"),
@@ -26,7 +26,6 @@ LISTA_SETORES = [
     ("6. ALA C - ENFERMAGEM", "cirurgica.hcid@gmail.com"),
     ("7. ALA D - ENFERMAGEM", "ortopediaalad.hcid@gmail.com"),
     ("8. ALA G/H", "aladgh.hcid@gmail.com"),
-    ("9. ALA E - ENFERMAGEM", ""),
     ("10. ALA F - ENFERMAGEM", "utihcid@gmail.com"),
     ("11. ALA I - ENFERMAGEM", "ortopediaalai.hcid@gmail.com"),
     ("12. ALA J - ENFERMAGEM", "ortopediaalaj.hcid@gmail.com"),
@@ -41,6 +40,8 @@ LISTA_SETORES = [
     ("21. COMISSÃO DE ÓBITOS", "comissaodeobito.hdacidade@gmail.com"),
     ("22. COMISSÃO DE ÉTICA EM ENFERMAGEM", "comissaodeetica.soc2@gmail.com"),
     ("23. CME", "cmeesterilizacao@gmail.com"),
+    ("27. CENTRAL DE TRANSPORTE INTRA HOSPITALAR", "centraltransporte.hcid@gmail.com"),
+    ("CENTRAL INTERNA DE TRANSPORTE", "centraltransporte.hcid@gmail.com"),
     ("28. DOCUMENTOS INSTITUCIONAIS (NAQH)", "documentos.soc2@gmail.com"),
     ("29. ECP", "carlosemilioecp@gmail.com"),
     ("30. ENDOSCOPIA", "endoscopiasoc2@gmail.com"),
@@ -51,6 +52,7 @@ LISTA_SETORES = [
     ("35. FARMACOVIGILÂNCIA", "farmacovigilanciahcid@gmail.com"),
     ("36. FATURAMENTO", "contasmedicassocorrao2@gmail.com"),
     ("37. FISIOTERAPIA / PS - ENFERMARIAS", "fisioreabsoc2@gmail.com"),
+    ("FISIOTERAPIA INTERNAÇÃO/PS", "fisioreabsoc2@gmail.com"),
     ("38. FISIOTERAPIA - UTI", "fisioterapiasocorrao@gmail.com"),
     ("39. FONOAUDIOLOGIA", "fonosocorrao2@yahoo.com"),
     ("40. GERÊNCIA DE ENFERMAGEM", "gerenciadeenf.hcid@gmail.com"),
@@ -81,12 +83,12 @@ LISTA_SETORES = [
     ("66. SAET", "coodsaet2026@gmail.com"),
     ("67. SADT", "sadthosp@gmail.com"),
     ("68. SDM/VERMELHA - ENFERMAGEM", "salavermelhasdm@gmail.com"),
+    ("SALA VERMELHA", "salavermelhasdm@gmail.com"),
     ("69. SERVIÇO SOCIAL", "servicosocialhcid@gmail.com"),
     ("70. SETOR DE IMAGEM", "sadt.hosp@gmail.com"),
     ("71. TECNOLOGIA DA INFORMAÇÃO", "suporteti.hcid@gmail.com"),
     ("72. TERAPIA OCUPACIONAL", "terapiaocupacional.hcid@gmail.com"),
     ("73. TRANSPORTE EXTERNO", "centraltransporte.hcid@gmail.com"),
-    ("CENTRAL INTERNA DE TRANSPORTE", "centraltransporte.hcid@gmail.com"),
     ("74. UNIDADE SENTINELA", "unidadesentinela@gmail.com"),
     ("75. UTI A - MÉDICOS", "pedrohfrota@gmail.com"),
     ("76. UTI B - MÉDICOS", "livia.goreth@ufma.br"),
@@ -127,28 +129,36 @@ def limpar_numero(valor):
     except:
         return str(valor)
 
-def formatar_data_br(valor):
-    try:
-        if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
-            return ""
-        return pd.to_datetime(valor).strftime("%d/%m/%Y")
-    except:
-        return str(valor).strip()
-
 def data_por_extenso(dt):
     meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     return f"{dt.day} de {meses[dt.month-1]} de {dt.year}"
 
+# ✅ CORRIGIDA BUSCA DE E-MAIL — agora busca parcial e ignora maiúsculas/minúsculas
 def buscar_email_setor(nome_setor):
     if not nome_setor or str(nome_setor).strip() == "":
-        return ""
+        return "nspsoc2@gmail.com"
     nome_setor = str(nome_setor).strip().upper()
     for _, linha in df_setores.iterrows():
         setor_lista = linha["SETOR"].upper()
         if nome_setor in setor_lista or setor_lista in nome_setor:
             return linha["E-MAIL"]
-    return "nspsoc2@gmail.com"  # Email padrão do NSP
+    return "nspsoc2@gmail.com"
+
+# ✅ TEXTO DO E-MAIL EXATAMENTE COMO VOCÊ PEDIU
+def montar_corpo_email(num_memo, ano):
+    return f"""Boa Tarde, Prezados, ou bom dia de acordo com o horário.
+
+Segue em anexo o Memorando Nº {num_memo}/{ano} para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.
+
+ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de Word ou PDF para arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens via e-mail sem arquivo como resposta.
+
+Atenciosamente,
+
+Ezequias S. Santos
+Agente Administrativo - NAQH & NSP
+nspsoc2@gmail.com
+"""
 
 def substituir_texto_no_docx(doc, dados):
     for p in doc.paragraphs:
@@ -203,12 +213,11 @@ if arquivo_excel:
     try:
         df = pd.read_excel(arquivo_excel, engine="openpyxl")
         
-        # ✅ CÁLCULO PRINCIPAL
+        # ✅ RESUMO GERAL
         enviados = contar_enviados(df)
         total_memorandos = TOTAL_GERAL_MEMORANDOS
         pendentes = total_memorandos - enviados
         
-        # ✅ PAINEL DE RESUMO — BEM VISÍVEL
         st.subheader("📊 RESUMO GERAL")
         col1, col2, col3 = st.columns(3)
         col1.metric("📋 Total Geral de Memorandos", f"{total_memorandos}")
@@ -218,10 +227,11 @@ if arquivo_excel:
         st.divider()
         
         data_selecionada = st.date_input("📅 Data de Envio", datetime.now())
+        ano_atual = data_selecionada.year
         data_extenso = data_por_extenso(data_selecionada)
         
-        # ✅ PROCESSAR CADA REGISTRO
         qtd_processados = 0
+        
         for idx, linha in df.iterrows():
             num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
             if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
@@ -251,7 +261,6 @@ if arquivo_excel:
             if not blocos_memo:
                 continue
             
-            # ✅ EXIBIR CADA NOTIFICAÇÃO
             if status_registro == "ENVIADO":
                 st.markdown(f"~~📋 Notificação {num_notif} — {nome_paciente} — {len(blocos_memo)} memorando(s)~~ ✅ **ENVIADO**")
                 continue
@@ -262,13 +271,19 @@ if arquivo_excel:
                     
                     for b in blocos_memo:
                         email_destino = buscar_email_setor(b["setor"])
-                        st.subheader(f"📄 Memorando 01 — Nº {b['num_memo']} / {data_selecionada.year}")
+                        
+                        # ✅ CORRIGIDO — sem ano duplicado!
+                        st.subheader(f"📄 Memorando 01 — Nº {b['num_memo']}/{ano_atual}")
                         st.write(f"**Setor:** {b['setor']} | **Gestor:** {b['gestor']}")
                         st.info(f"📧 E-mail: {email_destino}")
                         
-                        # Gerar documento
+                        # ✅ TEXTO DO E-MAIL EXIBIDO NA TELA
+                        corpo_email = montar_corpo_email(b['num_memo'], ano_atual)
+                        with st.expander("📋 Ver texto do E-mail"):
+                            st.text(corpo_email)
+                        
                         dados_docx = {
-                            "{{numero_memorando}}": b["num_memo"],
+                            "{{numero_memorando}}": f"{b['num_memo']}/{ano_atual}",
                             "{{gestor}}": b["gestor"],
                             "{{setor}}": b["setor"],
                             "{{notificacao_n}}": num_notif,
@@ -281,7 +296,7 @@ if arquivo_excel:
                             st.download_button(
                                 label="📄 Baixar Memorando (DOCX)",
                                 data=arquivo_docx,
-                                file_name=f"MEMORANDO_{b['num_memo']}.docx",
+                                file_name=f"MEMORANDO_{b['num_memo']}_{ano_atual}.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                             )
                         st.divider()
