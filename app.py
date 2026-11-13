@@ -167,7 +167,7 @@ def gerar_docx(dados):
         saida.seek(0)
         return saida
     except FileNotFoundError:
-        st.error("Arquivo modelo_memorando.docx não encontrado! Coloque-o na mesma pasta do app.py")
+        st.error("ERRO: Coloque o arquivo modelo_memorando.docx na mesma pasta do app.py")
         return None
     except Exception as e:
         st.error(f"Erro ao gerar arquivo: {str(e)}")
@@ -317,4 +317,4 @@ if arquivo_excel:
                         "{{n}}": m_noite,
                         "{{localizacao}}": localizacao,
                         "{{tipo_incidente}}": tipo_incidente,
-                       
+                        "{{
