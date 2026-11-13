@@ -18,7 +18,7 @@
                         "{{setor_notificante}}": setor_notificante,
                         "{{sugestao}}": sugestao
                     }
-                    
+
                     arquivo_pronto = gerar_docx(dados_docx)
                     if arquivo_pronto:
                         st.download_button(
@@ -27,5 +27,3 @@
                             file_name=f"NSP_Nº {num_notif}_{ano_atual}.docx",
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         )
-    except Exception as e:
-        st.error(f"Erro ao processar planilha: {str(e)}")
