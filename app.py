@@ -206,20 +206,14 @@ if arquivo_excel:
             classificacao_incidente = tratar_texto(linha.iloc[7]) if len(linha) > 7 else ""
             descricao_notificacao = tratar_texto(linha.iloc[8]) if len(linha) > 8 else ""
             leito = tratar_texto(linha.iloc[10]) if len(linha) > 10 else ""
+            setor_notificante = tratar_texto(linha.iloc[11]) if len(linha) > 11 else ""
             sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
             
-            manha = "☐"
-            tarde = "☐"
-            noite = "☐"
-            if turno:
-                if "MANHÃ" in turno or "MANHA" in turno:
-                    manha = "☑"
-                elif "TARDE" in turno:
-                    tarde = "☑"
-                elif "NOITE" in turno:
-                    noite = "☑"
+            m = "☑" if "MANHÃ" in turno.upper() else "☐"
+            t = "☑" if "TARDE" in turno.upper() else "☐"
+            n = "☑" if "NOITE" in turno.upper() else "☐"
             
-            # ✅ SÓ SETOR NOTIFICADO → GESTOR E E-MAIL
+            # ✅ Gestor e E-mail do SETOR NOTIFICADO
             gestor = buscar_gestor(setor_notificado)
             email_destino = buscar_email_setor(setor_notificado)
             
@@ -246,12 +240,13 @@ if arquivo_excel:
                 st.write(f"📅 Data de Emissão: {data_extenso}")
                 st.write(f"📅 Data da Ocorrência: {data_ocorrencia} | Notificação: {data_notificacao}")
                 st.write(f"📍 Local: {localizacao}")
-                st.write(f"📤 **Setor Notificado:** {setor_notificado}")
-                st.write(f"👤 **Gestor:** {gestor}")
+                st.write(f"🏛️ Setor Notificante: {setor_notificante}")
+                st.write(f"📤 Setor Notificado: {setor_notificado}")
+                st.write(f"👤 Gestor: {gestor}")
                 st.write(f"⚠️ Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
                 st.write(f"👤 Paciente: {nome_paciente} | Leito: {leito}")
-                st.write(f"🔄 Sugestão: {sugestao}")
-                st.write(f"📧 **E-mail para envio:** {email_destino}")
+                st.write(f"💡 Sugestão: {sugestao}")
+                st.write(f"📧 E-mail para envio: {email_destino}")
                 
                 corpo_email = f"""
 {saudacao} Prezado(a),
@@ -259,8 +254,8 @@ if arquivo_excel:
 Segue em anexo o Memorando Nº {num_notif}/{ano_atual} referente à notificação Nº {num_notif}, 
 para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.
 
-ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de Word ou PDF para arquivamento 
-de respostas conforme rotina institucional. Não serão aceitas mensagens via e-mail sem arquivo como resposta.
+ATENÇÃO: A resposta via e-mail deve conter um arquivo em formato Word ou PDF para arquivamento 
+das respostas conforme rotina institucional. Não serão aceitas mensagens sem arquivo anexo.
 
 Atenciosamente,
 
@@ -274,16 +269,17 @@ nspsoc2@gmail.com
                     st.text(corpo_email.strip())
                 
                 dados_docx = {
-                    "{{numero_memorando}}": f"NSP Nº {num_notif}/{ano_atual}",
+                    "{{numero_memorando}}": f"{num_notif}/{ano_atual}",
                     "{{notificacao_n}}": num_notif,
                     "{{gestor}}": gestor,
                     "{{setor_notificado}}": setor_notificado,
+                    "{{setor_notificante}}": setor_notificante,
                     "{{data_envio}}": data_extenso,
                     "{{data_ocorrencia}}": data_ocorrencia,
                     "{{data_notificacao}}": data_notificacao,
-                    "{{m}}": manha,
-                    "{{t}}": tarde,
-                    "{{n}}": noite,
+                    "{{m}}": m,
+                    "{{t}}": t,
+                    "{{n}}": n,
                     "{{localizacao}}": localizacao,
                     "{{tipo_incidente}}": tipo_incidente,
                     "{{classificacao_incidente}}": classificacao_incidente,
@@ -300,7 +296,7 @@ nspsoc2@gmail.com
                         data=arquivo_pronto,
                         file_name=f"NSP_Nº {num_notif}_{ano_atual}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"botao_{num_notif}_{idx}",
+                        key=f"download_{num_notif}_{idx}",
                         disabled=enviado
                     )
     except Exception as e:
