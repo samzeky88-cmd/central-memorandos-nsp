@@ -8,14 +8,8 @@ import io
 from datetime import datetime
 from docx import Document
 
-# =================================================================
-# CONFIGURAÇÕES FIXAS
-# =================================================================
 TOTAL_GERAL_MEMORANDOS = 964
 
-# =================================================================
-# LISTA COMPLETA DE E-MAILS
-# =================================================================
 LISTA_SETORES = [
     ("DIREÇÃO", "direcao.hospitaldacidade@gmail.com"),
     ("GABINETE DA DIREÇÃO", "gabinete.hospitaldacidade@gmail.com"),
@@ -105,9 +99,6 @@ LISTA_SETORES = [
 df_setores = pd.DataFrame(LISTA_SETORES, columns=["SETOR", "E-MAIL"])
 df_setores = df_setores[df_setores["E-MAIL"].str.strip() != ""].reset_index(drop=True)
 
-# =================================================================
-# FUNÇÕES AUXILIARES
-# =================================================================
 def tratar_texto(valor):
     if pd.isna(valor):
         return ""
@@ -167,7 +158,7 @@ def gerar_docx(dados):
         saida.seek(0)
         return saida
     except FileNotFoundError:
-        st.error("ERRO: Coloque o arquivo modelo_memorando.docx na mesma pasta do app.py")
+        st.error("ERRO: Coloque modelo_memorando.docx na mesma pasta do app.py")
         return None
     except Exception as e:
         st.error(f"Erro ao gerar arquivo: {str(e)}")
@@ -187,9 +178,6 @@ def contar_enviados(df):
                         qtd += 1
     return qtd
 
-# =================================================================
-# INTERFACE PRINCIPAL
-# =================================================================
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 st.title("📄 Emissor de Memorandos — Hospital da Cidade Dr. Jackson Lago")
 st.divider()
@@ -303,7 +291,6 @@ if arquivo_excel:
                     
                     with st.expander("Texto do E-mail"):
                         st.text(corpo_email)
-                    
                     dados_docx = {
                         "{{numero_memorando}}": b["num_memo"] + "/" + str(ano_atual),
                         "{{notificacao_n}}": num_notif,
@@ -317,4 +304,16 @@ if arquivo_excel:
                         "{{n}}": m_noite,
                         "{{localizacao}}": localizacao,
                         "{{tipo_incidente}}": tipo_incidente,
-                        "{{class
+                        "{{classificacao_incidente}}": classificacao_incidente,
+                        "{{descricao_notificacao}}": descricao_notificacao,
+                        "{{nome_paciente}}": nome_paciente,
+                        "{{leito}}": leito,
+                        "{{setor_notificante}}": setor_notificante,
+                        "{{sugestao}}": sugestao
+                    }
+                    
+                    arquivo_pronto = gerar_docx(dados_docx)
+                    if arquivo_pronto:
+                        st.download_button(
+                            label="📄 Baixar Memorando",
+                            data=
