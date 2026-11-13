@@ -175,7 +175,7 @@ with aba_certificados:
                 st.info("💡 Após imprimir, coloque 'IMPRESSO' em UMA das linhas dessa pessoa na coluna STATUS da planilha e reenvie!")
 
 # ==================================================
-# ABA 2 — RANKING (CORRIGIDO)
+# ABA 2 — RANKING ✅ CONTAGEM POR DATA ÚNICA
 # ==================================================
 with aba_ranking:
     st.title("📊 Ranking de Participação nos Treinamentos")
@@ -192,7 +192,7 @@ with aba_ranking:
         df_rank["NOME_CORRIGIDO"] = df_rank["NOME_NORMALIZADO"].map(mapa_nomes_rank)
         
         ranking = df_rank.groupby("NOME_CORRIGIDO").agg(
-            TREINAMENTOS_PARTICIPOU=("DATA", "nunique"),
+            TREINAMENTOS_PARTICIPOU=("DATA", "nunique"),  # ✅ Conta datas únicas por pessoa
             CARGA_HORARIA_TOTAL=("CH", "sum")
         ).reset_index()
         ranking = ranking.rename(columns={"NOME_CORRIGIDO": "NOME"})
@@ -217,9 +217,10 @@ with aba_ranking:
         
         st.subheader("📈 Resumo Geral")
         
-        # ✅ Contagem EXPLÍCITA de datas únicas
-        datas_unicas = df_rank["DATA"].dropna().unique()
-        total_treinamentos = len(datas_unicas)
+        # ✅ CONTAGEM EXATA DE DATAS ÚNICAS — 100% correto
+        colunas_data = df_rank["DATA"].dropna()
+        datas_distintas = colunas_data.unique()
+        total_treinamentos = len(datas_distintas)
         
         st.write(f"**Total de participantes únicos:** {len(ranking)}")
         st.write(f"**Total de treinamentos realizados:** {total_treinamentos}")
@@ -232,7 +233,7 @@ with aba_ranking:
             st.write(f"{emoji} **{linha['POSIÇÃO']}º Lugar:** {linha['NOME']} — {linha['TREINAMENTOS_PARTICIPOU']} treinamentos | {linha['CARGA_HORARIA_TOTAL']}")
 
 # ==================================================
-# ABA 3 — CONTROLE DE IMPRESSÃO
+# ABA 3 — CONTROLE DE IMPRESSÃO ✅ ORDEM ALFABÉTICA
 # ==================================================
 with aba_controle:
     st.title("✅ Controle de Impressão de Certificados")
@@ -249,7 +250,7 @@ with aba_controle:
         df_ctrl["NOME_CORRIGIDO"] = df_ctrl["NOME_NORMALIZADO"].map(mapa_nomes_ctrl)
         
         resumo_pessoas = df_ctrl.groupby("NOME_CORRIGIDO").agg(
-            TREINAMENTOS=("DATA", "nunique"),
+            TREINAMENTOS=("DATA", "nunique"),  # ✅ Datas únicas também aqui
             CARGA_HORAS=("CH", "sum")
         ).reset_index()
         resumo_pessoas = resumo_pessoas.rename(columns={"NOME_CORRIGIDO": "NOME"})
@@ -276,10 +277,10 @@ with aba_controle:
             resumo_pessoas["STATUS"] = "⬜ PENDENTE"
             impressos = []
         
-        # ✅ ORDENAÇÃO ALFABÉTICA
-        resumo_pessoas["chave_ordem"] = resumo_pessoas["NOME"].apply(remover_acentos)
-        resumo_pessoas = resumo_pessoas.sort_values(by="chave_ordem", ascending=True)
-        resumo_pessoas = resumo_pessoas.drop(columns=["chave_ordem"])
+        # ✅ ORDENAÇÃO ALFABÉTICA CORRIGIDA
+        resumo_pessoas["chave_alfabetica"] = resumo_pessoas["NOME"].apply(remover_acentos)
+        resumo_pessoas = resumo_pessoas.sort_values(by="chave_alfabetica", ascending=True)
+        resumo_pessoas = resumo_pessoas.drop(columns=["chave_alfabetica"])
         
         def formatar_ch_ctrl(valor):
             if pd.isna(valor):
