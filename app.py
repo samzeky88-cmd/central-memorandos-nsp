@@ -175,7 +175,7 @@ with aba_certificados:
                 st.info("💡 Após imprimir, coloque 'IMPRESSO' em UMA das linhas dessa pessoa na coluna STATUS da planilha e reenvie!")
 
 # ==================================================
-# ABA 2 — RANKING ✅ CONTAGEM POR DATA ÚNICA
+# ABA 2 — RANKING ✅ TOTAL FIXADO EM 44
 # ==================================================
 with aba_ranking:
     st.title("📊 Ranking de Participação nos Treinamentos")
@@ -192,7 +192,7 @@ with aba_ranking:
         df_rank["NOME_CORRIGIDO"] = df_rank["NOME_NORMALIZADO"].map(mapa_nomes_rank)
         
         ranking = df_rank.groupby("NOME_CORRIGIDO").agg(
-            TREINAMENTOS_PARTICIPOU=("DATA", "nunique"),  # ✅ Conta datas únicas por pessoa
+            TREINAMENTOS_PARTICIPOU=("DATA", "nunique"),
             CARGA_HORARIA_TOTAL=("CH", "sum")
         ).reset_index()
         ranking = ranking.rename(columns={"NOME_CORRIGIDO": "NOME"})
@@ -217,13 +217,9 @@ with aba_ranking:
         
         st.subheader("📈 Resumo Geral")
         
-        # ✅ CONTAGEM EXATA DE DATAS ÚNICAS — 100% correto
-        colunas_data = df_rank["DATA"].dropna()
-        datas_distintas = colunas_data.unique()
-        total_treinamentos = len(datas_distintas)
-        
+        # ✅ TOTAL DEFINIDO POR VOCÊ — FIXO EM 44
         st.write(f"**Total de participantes únicos:** {len(ranking)}")
-        st.write(f"**Total de treinamentos realizados:** {total_treinamentos}")
+        st.write(f"**Total de treinamentos realizados:** 44")
         
         st.subheader("🏆 Destaques — Top 10")
         emojis = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
@@ -250,7 +246,7 @@ with aba_controle:
         df_ctrl["NOME_CORRIGIDO"] = df_ctrl["NOME_NORMALIZADO"].map(mapa_nomes_ctrl)
         
         resumo_pessoas = df_ctrl.groupby("NOME_CORRIGIDO").agg(
-            TREINAMENTOS=("DATA", "nunique"),  # ✅ Datas únicas também aqui
+            TREINAMENTOS=("DATA", "nunique"),
             CARGA_HORAS=("CH", "sum")
         ).reset_index()
         resumo_pessoas = resumo_pessoas.rename(columns={"NOME_CORRIGIDO": "NOME"})
@@ -277,7 +273,7 @@ with aba_controle:
             resumo_pessoas["STATUS"] = "⬜ PENDENTE"
             impressos = []
         
-        # ✅ ORDENAÇÃO ALFABÉTICA CORRIGIDA
+        # ✅ ORDENAÇÃO ALFABÉTICA
         resumo_pessoas["chave_alfabetica"] = resumo_pessoas["NOME"].apply(remover_acentos)
         resumo_pessoas = resumo_pessoas.sort_values(by="chave_alfabetica", ascending=True)
         resumo_pessoas = resumo_pessoas.drop(columns=["chave_alfabetica"])
@@ -316,7 +312,8 @@ with aba_controle:
         📖 **Legenda:**
         - ✅ IMPRESSO = Já foi emitido
         - ⬜ PENDENTE = Ainda precisa ser emitido
-        - 📅 TREINAMENTOS = Conta cada DATA única (1 dia = 1 treinamento)
+        - 📅 TREINAMENTOS = Quantidade de treinamentos por participante
+        - 🔢 Total de treinamentos do ano: **44**
         
         ✅ Nomes em ordem alfabética de A a Z!
         """)
