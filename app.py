@@ -1,266 +1,317 @@
-import os
-import pandas as pd
 import streamlit as st
+import pandas as pd
+from docxtpl import DocxTemplate
 import io
-from datetime import datetime, timedelta, timezone
-from docx import Document
-import time
+import re
+import unicodedata
+
+st.set_page_config(page_title="Sistema de Certificados — Coordenadores", layout="wide")
+
+MAX_TREINAMENTOS = 14
+
+# ==================================================
+# 🧠 FUNÇÕES AUXILIARES
+# ==================================================
+def normalizar_nome(texto):
+    if not isinstance(texto, str):
+        texto = str(texto)
+    texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII')
+    texto = texto.lower()
+    texto = texto.strip()
+    texto = re.sub(r'\s+', ' ', texto)
+    return texto
+
+def remover_acentos(texto):
+    if not isinstance(texto, str):
+        texto = str(texto)
+    return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII').lower()
+
+def corrigir_texto(texto):
+    if not isinstance(texto, str):
+        try:
+            texto = str(texto)
+        except:
+            return ""
+    if texto.strip() == "" or texto.strip().upper() == "NAN":
+        return ""
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    return texto
 
 
-# --- FUNÇÃO DE DATA ---
-def obter_data_por_extenso(dt):
-    meses = {
-        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-    }
-    return f"{dt.day} de {meses[dt.month]} de {dt.year}"
+# --- ABAS DO SISTEMA ---
+aba_certificados, aba_ranking, aba_controle = st.tabs([
+    "📜 Gerar Certificados", 
+    "📊 Ranking de Participação",
+    "✅ Controle de Impressão"
+])
 
-
-def formatar_data_br_curta(dt):
-    """Retorna data no formato DD/MM/AAAA"""
-    return dt.strftime("%d/%m/%Y")
-
-
-st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
-
-
-# --- CABEÇALHO SUPERIOR DIREITO ---
-_, _, cabecalho_dir = st.columns([1, 1, 1.4])
-with cabecalho_dir:
-    st.markdown("### 🚀 Desenvolvendo soluções automatizadas")
-    st.caption("Ezequias S. Santos 💻 • Agente Administrativo")
+# ==================================================
+# ABA 1 — GERAR CERTIFICADOS
+# ==================================================
+with aba_certificados:
+    st.title("📜 Gerador de Certificados — Coordenadores")
+    
     st.markdown(
-        "<p style='font-size: 13px; font-style: italic; color: #cccccc; margin-top: 8px;'>"
-        "📖 “Consagre ao Senhor tudo o que você faz, e os seus planos serão bem-sucedidos” — Prov. 16:3 🙏"
-        "</p>",
+        "<div style='text-align: center; font-size: 18px; color: #1a4d80; font-style: italic; margin: 10px 0 25px 0;'>"
+        "Consagre seus planos ao Senhor e eles serão bem-sucedidos ✨"
+        "</div>",
         unsafe_allow_html=True
     )
 
-st.markdown("---")
+    arquivo_excel = st.file_uploader("📂 Escolha a planilha (.xlsx)", type=["xlsx"], key="cert_planilha")
 
-
-# --- EFEITO DE DIGITAÇÃO ---
-texto_animado = "📝 Gerando memorandos com precisão e agilidade..."
-espaco = st.empty()
-texto_exibido = ""
-for letra in texto_animado:
-    texto_exibido += letra
-    espaco.markdown(f"#### {texto_exibido}")
-    time.sleep(0.05)
-espaco.markdown(f"#### {texto_animado}")
-
-
-st.title("📄 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago 🏥")
-
-
-# --- DATA EM TEMPO REAL (Brasília) ---
-fuso_brasilia = timezone(timedelta(hours=-3))
-data_hoje = datetime.now(fuso_brasilia)
-data_extenso = obter_data_por_extenso(data_hoje)
-data_curta = formatar_data_br_curta(data_hoje)  # DD/MM/AAAA para o Word
-
-st.markdown("### 📅 Data de Envio (atualizada em tempo real)")
-st.info(f"📌 Data: **{data_extenso}**  |  No formato do documento: **{data_curta}**")
-data_selecionada = data_hoje
-
-
-arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
-caminho_modelo = "modelo_memorando.docx"
-
-
-# --- SUBSTITUIÇÃO DE TEXTO NO WORD ---
-def substituir_texto_protegendo_logos(doc, dicionario_tags):
-    for paragrafo in doc.paragraphs:
-        for tag, valor in dicionario_tags.items():
-            if tag in paragrafo.text:
-                for run in paragrafo.runs:
-                    if tag in run.text:
-                        run.text = run.text.replace(tag, valor)
-
-    for tabela in doc.tables:
-        for linha in tabela.rows:
-            for celula in linha.cells:
-                for paragrafo in celula.paragraphs:
-                    for tag, valor in dicionario_tags.items():
-                        if tag in paragrafo.text:
-                            for run in paragrafo.runs:
-                                if tag in run.text:
-                                    run.text = run.text.replace(tag, valor)
-
-
-def formatar_data_br(valor):
-    try:
-        if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
-            return ""
-        return pd.to_datetime(valor).strftime("%d/%m/%Y")
-    except:
-        return str(valor).strip()
-
-
-def limpar_numero_float(valor):
-    if pd.isna(valor) or str(valor).strip().lower() == "nan":
-        return ""
-    try:
-        if isinstance(valor, float) and valor.is_integer():
-            return str(int(valor))
-        v_str = str(valor).strip()
-        if v_str.endswith(".0"):
-            return v_str[:-2]
-        return v_str
-    except:
-        return str(valor)
-
-
-def tratar_str_limpa(valor):
-    if pd.isna(valor) or str(valor).strip().lower() == "nan" or str(valor).strip().lower() == "none":
-        return ""
-    return str(valor).strip()
-
-
-@st.fragment
-def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio, data_curta_envio):
-    num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
-    if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
-        return
-
-    status_envio = str(linha.iloc[1]).strip().upper() if num_colunas > 1 else ""
-
-    dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else ""
-    dt_notif = formatar_data_br(linha.iloc[3]) if num_colunas > 3 else ""
-    turno_planilha = str(linha.iloc[4]).strip().upper() if num_colunas > 4 else ""
-    onde_ocorreu = tratar_str_limpa(linha.iloc[5]) if num_colunas > 5 else "Ala B"
-    tipo_incidente = tratar_str_limpa(linha.iloc[6]) if num_colunas > 6 else ""
-    classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
-    descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
-
-    nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
-    if nome_do_paciente.upper() == "PACIENTE":
-        return
-
-    leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
-    setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
-    sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else ""
-    gestor_destinatario = tratar_str_limpa(linha.iloc[13]) if num_colunas > 13 else "GESTOR DE ENFERMAGEM"
-    setor_notificado_final = tratar_str_limpa(linha.iloc[14]) if num_colunas > 14 else onde_ocorreu
-
-    num_memo_cru = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else ""
-    if num_memo_cru == "" or num_memo_cru.upper() == "N° MEMO 01":
-        num_memo_cru = "S-N"
-
-    email_destino = tratar_str_limpa(linha.iloc[21]) if num_colunas > 21 else ""
-    if email_destino.upper() == "EMAIL_SETOR":
-        return
-
-    num_memo_limpo = num_memo_cru.replace("Nº", "").replace("No", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
-    nome_base_arquivo = f"MEMORANDO N° {num_memo_limpo}_NOTIFICAÇÃO_N° {num_notif}_I_NSP"
-
-    marca_manha = "X" if "MANH" in turno_planilha else ""
-    marca_tarde = "X" if "TARD" in turno_planilha else ""
-    marca_noite = "X" if "NOIT" in turno_planilha else ""
-
-    if setor_notificante_bruto == "":
-        setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE"
-
-    # ✅ AQUI ESTÁ A CORREÇÃO: data_curta_envio = HOJE, sempre atualizada
-    dados_memorando = {
-        "{{numero_memorando}}": num_memo_cru,
-        "{{gestor}}": gestor_destinatario,
-        "{{setor}}": setor_notificado_final,
-        "{{notificacao_n}}": num_notif,
-        "{{data_notificacao}}": dt_notif,
-        "{{data_ocorrencia}}": dt_ocorr,
-        "{{localizacao}}": onde_ocorreu,
-        "{{tipo_incidente}}": tipo_incidente,
-        "{{classificacao_incidente}}": classificacao_incidente,
-        "{{descricao_notificacao}}": descricao_notificacao,
-        "{{nome_paciente}}": nome_do_paciente,
-        "{{leito}}": leito_paciente,
-        "{{setor_notificante}}": setor_notificante_bruto,
-        "{{sugestao}}": sugestao_nsp,
-        "{{m}}": marca_manha,
-        "{{t}}": marca_tarde,
-        "{{n}}": marca_noite,
-        "{{data_envio}}": data_curta_envio,       # ✅ DD/MM/AAAA — HOJE
-        "{{data_envio_extenso}}": data_extenso_envio  # ✅ Por extenso — HOJE
-    }
-
-    hora_atual = datetime.now(fuso_brasilia).hour
-    saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados" if hora_atual < 18 else "Boa Noite Prezados"
-
-    corpo_email = (
-        f"{saudacao},\n\n"
-        f"Segue em Anexo o Memorando {num_memo_cru} para ser analisado e respondido "
-        f"(via e-mail) em até 15 dias após a data presente.\n\n"
-        f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para "
-        f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens "
-        f"via e-mail sem arquivo como resposta.\n\n"
-        f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP:\n"
-        f"• Memorando: {num_memo_cru}\n"
-        f"• Notificação: N°  {num_notif}\n\n"
-        f"Atenciosamente,\n"
-        f"Ezequias S. Santos\n"
-        f"Agente Administrativo - NAQH & NSP"
-    )
-
-    col_nome, col_word, col_pdf, col_copiar = st.columns([1.5, 0.8, 0.8, 1.8])
-
-    with col_nome:
-        if status_envio == "ENVIADO":
-            st.markdown(f"~~{nome_do_paciente}~~ 🟢 *(Já Enviado)*")
+    if arquivo_excel:
+        df = pd.read_excel(arquivo_excel, sheet_name="CORDENADORES", engine="openpyxl")
+        df.columns = df.columns.str.strip()
+        
+        df["NOME_NORMALIZADO"] = df["NOME"].apply(normalizar_nome)
+        mapa_nomes = df.drop_duplicates(subset=["NOME_NORMALIZADO"])[["NOME_NORMALIZADO", "NOME"]]
+        mapa_nomes = mapa_nomes.set_index("NOME_NORMALIZADO")["NOME"].to_dict()
+        df["NOME_CORRIGIDO"] = df["NOME_NORMALIZADO"].map(mapa_nomes)
+        
+        if "STATUS" in df.columns:
+            status_por_nome = df.groupby("NOME_CORRIGIDO")["STATUS"].apply(
+                lambda x: any(str(val).strip().upper() == "IMPRESSO" for val in x.dropna())
+            ).reset_index()
+            status_por_nome.columns = ["NOME", "JA_IMPRESSO"]
+            impressos_nomes = status_por_nome[status_por_nome["JA_IMPRESSO"] == True]["NOME"].unique()
         else:
-            st.markdown(f"**🔹 {nome_do_paciente}**")
-        if email_destino:
-            st.caption(f"📧 Destinatário: {email_destino}")
+            impressos_nomes = []
+        
+        todos_nomes_unicos = df["NOME_CORRIGIDO"].dropna().unique()
+        todos_nomes = sorted(todos_nomes_unicos, key=lambda x: remover_acentos(str(x)))
+        
+        mostrar_so_pendentes = st.checkbox("👁️ Mostrar apenas pendentes", value=False)
+        
+        if mostrar_so_pendentes:
+            nomes_filtrados = [n for n in todos_nomes if n not in impressos_nomes]
+            st.info(f"📋 {len(nomes_filtrados)} pendentes de {len(todos_nomes)} total")
+        else:
+            nomes_filtrados = todos_nomes
+        
+        nome_escolhido = st.selectbox("👤 Selecione o nome do coordenador", nomes_filtrados, key="cert_nome")
 
-    with col_word:
-        doc_word = Document(caminho_modelo)
-        substituir_texto_protegendo_logos(doc_word, dados_memorando)
-        word_io = io.BytesIO()
-        doc_word.save(word_io)
-        word_io.seek(0)
-        st.download_button(
-            label="📄 WORD",
-            data=word_io.getvalue(),
-            file_name=f"{nome_base_arquivo}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            key=f"w_{index}"
-        )
+        if nome_escolhido:
+            dados_pessoa = df[df["NOME_CORRIGIDO"] == nome_escolhido].reset_index(drop=True)
+            contexto = {"NOME": nome_escolhido}
+            
+            st.info(f"✅ {nome_escolhido} — {len(dados_pessoa)} treinamento(s) incluídos")
+            
+            for i in range(MAX_TREINAMENTOS):
+                if i < len(dados_pessoa):
+                    linha = dados_pessoa.iloc[i]
+                    data_val = linha["DATA"]
+                    if pd.isna(data_val):
+                        contexto[f"Data_{i+1}"] = ""
+                    elif hasattr(data_val, 'strftime'):
+                        contexto[f"Data_{i+1}"] = data_val.strftime("%d/%m/%Y")
+                    else:
+                        contexto[f"Data_{i+1}"] = str(data_val)
+                    
+                    tema_bruto = linha["TEMA"]
+                    if pd.isna(tema_bruto):
+                        contexto[f"Tema_{i+1}"] = ""
+                    else:
+                        contexto[f"Tema_{i+1}"] = corrigir_texto(str(tema_bruto))
+                    
+                    ch_valor = linha["CH"]
+                    if pd.isna(ch_valor):
+                        contexto[f"Ch_{i+1}"] = ""
+                    else:
+                        ch_valor = float(ch_valor)
+                        if ch_valor.is_integer():
+                            contexto[f"Ch_{i+1}"] = f"{int(ch_valor)}H"
+                        else:
+                            contexto[f"Ch_{i+1}"] = f"{ch_valor:.2f}H".rstrip('0').rstrip('.') + 'H'
+                else:
+                    contexto[f"Data_{i+1}"] = ""
+                    contexto[f"Tema_{i+1}"] = ""
+                    contexto[f"Ch_{i+1}"] = ""
+            
+            ch_total = 0.0
+            for i in range(MAX_TREINAMENTOS):
+                ch_texto = contexto[f"Ch_{i+1}"]
+                if ch_texto and ch_texto != "":
+                    try:
+                        ch_total += float(ch_texto.replace("H", ""))
+                    except:
+                        pass
+            
+            if ch_total.is_integer():
+                contexto["CARGA_TOTAL"] = f"{int(ch_total)}H"
+            else:
+                contexto["CARGA_TOTAL"] = f"{ch_total:.2f}H".rstrip('0').rstrip('.') + 'H'
 
-    with col_pdf:
-        st.download_button(
-            label="📕 PDF",
-            data=word_io.getvalue(),
-            file_name=f"{nome_base_arquivo}.pdf",
-            mime="application/pdf",
-            key=f"p_{index}"
-        )
+            st.subheader("📋 Resumo do participante")
+            st.write(f"**Nome:** {nome_escolhido}")
+            st.write(f"**Treinamentos:** {len(dados_pessoa)}")
+            st.write(f"**Carga Horária Total:** {contexto['CARGA_TOTAL']}")
+            
+            with st.expander("📝 Ver lista de treinamentos"):
+                for i in range(len(dados_pessoa)):
+                    data = contexto[f'Data_{i+1}']
+                    tema = contexto[f'Tema_{i+1}']
+                    ch = contexto[f'Ch_{i+1}']
+                    if tema:
+                        st.write(f"{i+1}. {data} — {tema} — {ch}")
 
-    with col_copiar:
-        st.code(corpo_email, language="text")
+            st.subheader("📄 Modelo do certificado (.docx)")
+            modelo = st.file_uploader("Escolha o modelo do certificado", type=["docx"], key="cert_modelo")
 
-    st.markdown("---")
+            if modelo:
+                doc = DocxTemplate(modelo)
+                doc.render(contexto)
+                saida = io.BytesIO()
+                doc.save(saida)
+                saida.seek(0)
+                st.success("✅ Certificado gerado com sucesso!")
+                st.download_button(
+                    label="📥 Baixar Certificado",
+                    data=saida,
+                    file_name=f"Certificado_{nome_escolhido.replace(' ', '_')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key="cert_download"
+                )
+                st.info("💡 Após imprimir, coloque 'IMPRESSO' em UMA das linhas dessa pessoa na coluna STATUS da planilha e reenvie!")
 
+# ==================================================
+# ABA 2 — RANKING (✅ CORRIGIDO: conta datas únicas)
+# ==================================================
+with aba_ranking:
+    st.title("📊 Ranking de Participação nos Treinamentos")
+    
+    arquivo_ranking = st.file_uploader("📂 Escolha a planilha (.xlsx)", type=["xlsx"], key="rank_planilha")
 
-if arquivo_excel:
-    df = pd.read_excel(arquivo_excel, header=None)
+    if arquivo_ranking:
+        df_rank = pd.read_excel(arquivo_ranking, sheet_name="CORDENADORES", engine="openpyxl")
+        df_rank.columns = df_rank.columns.str.strip()
+        
+        df_rank["NOME_NORMALIZADO"] = df_rank["NOME"].apply(normalizar_nome)
+        mapa_nomes_rank = df_rank.drop_duplicates(subset=["NOME_NORMALIZADO"])[["NOME_NORMALIZADO", "NOME"]]
+        mapa_nomes_rank = mapa_nomes_rank.set_index("NOME_NORMALIZADO")["NOME"].to_dict()
+        df_rank["NOME_CORRIGIDO"] = df_rank["NOME_NORMALIZADO"].map(mapa_nomes_rank)
+        
+        ranking = df_rank.groupby("NOME_CORRIGIDO").agg(
+            QUANTIDADE_TREINAMENTOS=("DATA", "nunique"),  # ✅ Conta datas únicas por pessoa
+            CARGA_HORARIA_TOTAL=("CH", "sum")
+        ).reset_index()
+        ranking = ranking.rename(columns={"NOME_CORRIGIDO": "NOME"})
+        
+        ranking = ranking.sort_values(
+            by=["QUANTIDADE_TREINAMENTOS", "CARGA_HORARIA_TOTAL"],
+            ascending=[False, False]
+        ).reset_index(drop=True)
+        
+        ranking.insert(0, "POSIÇÃO", range(1, len(ranking) + 1))
+        
+        def formatar_ch(valor):
+            if pd.isna(valor):
+                return "0H"
+            if valor.is_integer():
+                return f"{int(valor)}H"
+            return f"{valor:.2f}H".rstrip('0').rstrip('.') + 'H'
+        
+        ranking["CARGA_HORARIA_TOTAL"] = ranking["CARGA_HORARIA_TOTAL"].apply(formatar_ch)
+        
+        st.dataframe(ranking, use_container_width=True, hide_index=True)
+        
+        st.subheader("📈 Resumo Geral")
+        total_treinamentos = df_rank["DATA"].nunique()  # ✅ Total de datas únicas = total de treinamentos
+        st.write(f"**Total de participantes únicos:** {len(ranking)}")
+        st.write(f"**Total de treinamentos realizados:** {total_treinamentos}")
+        
+        st.subheader("🏆 Destaques — Top 10")
+        emojis = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
+        for pos in range(min(10, len(ranking))):
+            emoji = emojis[pos]
+            linha = ranking.iloc[pos]
+            st.write(f"{emoji} **{linha['POSIÇÃO']}º Lugar:** {linha['NOME']} — {linha['QUANTIDADE_TREINAMENTOS']} treinamentos | {linha['CARGA_HORARIA_TOTAL']}")
 
-    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0]) == "1"):
-        df = df.iloc[1:]
-    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1]) == "1"):
-        df = df.iloc[2:]
-
-    data_extenso_envio = obter_data_por_extenso(data_selecionada)
-    data_curta_envio = formatar_data_br_curta(data_selecionada)
-    num_colunas = len(df.columns)
-
-    df = df.dropna(subset=[df.columns[0]])
-    if num_colunas > 9:
-        df = df.dropna(subset=[df.columns[9]])
-        df = df[df[df.columns[9]].astype(str).str.strip() != ""]
-
-    st.success(f"✅ Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
-
-    for index, line in df.iterrows():
-        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio, data_curta_envio)
-else:
-    st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
+# ==================================================
+# ABA 3 — CONTROLE DE IMPRESSÃO
+# ==================================================
+with aba_controle:
+    st.title("✅ Controle de Impressão de Certificados")
+    
+    arquivo_ctrl = st.file_uploader("📂 Escolha a planilha (.xlsx)", type=["xlsx"], key="ctrl_planilha")
+    
+    if arquivo_ctrl:
+        df_ctrl = pd.read_excel(arquivo_ctrl, sheet_name="CORDENADORES", engine="openpyxl")
+        df_ctrl.columns = df_ctrl.columns.str.strip()
+        
+        df_ctrl["NOME_NORMALIZADO"] = df_ctrl["NOME"].apply(normalizar_nome)
+        mapa_nomes_ctrl = df_ctrl.drop_duplicates(subset=["NOME_NORMALIZADO"])[["NOME_NORMALIZADO", "NOME"]]
+        mapa_nomes_ctrl = mapa_nomes_ctrl.set_index("NOME_NORMALIZADO")["NOME"].to_dict()
+        df_ctrl["NOME_CORRIGIDO"] = df_ctrl["NOME_NORMALIZADO"].map(mapa_nomes_ctrl)
+        
+        resumo_pessoas = df_ctrl.groupby("NOME_CORRIGIDO").agg(
+            TREINAMENTOS=("DATA", "nunique"),  # ✅ Também usa datas únicas aqui
+            CARGA_HORAS=("CH", "sum")
+        ).reset_index()
+        resumo_pessoas = resumo_pessoas.rename(columns={"NOME_CORRIGIDO": "NOME"})
+        
+        if "STATUS" in df_ctrl.columns:
+            status_por_nome = df_ctrl.groupby("NOME_CORRIGIDO")["STATUS"].apply(
+                lambda x: any(str(val).strip().upper() == "IMPRESSO" for val in x.dropna())
+            ).reset_index()
+            status_por_nome.columns = ["NOME_CORRIGIDO", "JA_IMPRESSO"]
+            
+            resumo_pessoas = pd.merge(
+                resumo_pessoas, 
+                status_por_nome, 
+                left_on="NOME", 
+                right_on="NOME_CORRIGIDO", 
+                how="left"
+            )
+            resumo_pessoas["STATUS"] = resumo_pessoas["JA_IMPRESSO"].apply(
+                lambda x: "✅ IMPRESSO" if x else "⬜ PENDENTE"
+            )
+            resumo_pessoas = resumo_pessoas.drop(columns=["NOME_CORRIGIDO", "JA_IMPRESSO"])
+            impressos = resumo_pessoas[resumo_pessoas["STATUS"] == "✅ IMPRESSO"]["NOME"].unique()
+        else:
+            resumo_pessoas["STATUS"] = "⬜ PENDENTE"
+            impressos = []
+        
+        # ✅ ORDENAÇÃO ALFABÉTICA GARANTIDA
+        resumo_pessoas["chave_ordem"] = resumo_pessoas["NOME"].apply(remover_acentos)
+        resumo_pessoas = resumo_pessoas.sort_values(by="chave_ordem", ascending=True)
+        resumo_pessoas = resumo_pessoas.drop(columns=["chave_ordem"])
+        
+        def formatar_ch_ctrl(valor):
+            if pd.isna(valor):
+                return "0H"
+            if valor.is_integer():
+                return f"{int(valor)}H"
+            return f"{valor:.2f}H".rstrip('0').rstrip('.') + 'H'
+        
+        resumo_pessoas["CARGA_HORAS"] = resumo_pessoas["CARGA_HORAS"].apply(formatar_ch_ctrl)
+        
+        total = len(resumo_pessoas)
+        qtd_impressos = len(impressos)
+        qtd_pendentes = total - qtd_impressos
+        
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            st.metric(label="📋 TOTAL GERAL", value=f"{total}")
+        with col2:
+            st.metric(label="✅ IMPRESSOS", value=f"{qtd_impressos}")
+        with col3:
+            st.metric(label="⬜ PENDENTES", value=f"{qtd_pendentes}")
+        
+        if total > 0:
+            porcentagem = int((qtd_impressos / total) * 100)
+            st.progress(porcentagem / 100, text=f"Concluído: {porcentagem}% — {qtd_impressos} de {total}")
+        
+        st.markdown("---")
+        st.dataframe(resumo_pessoas[["STATUS", "NOME", "TREINAMENTOS", "CARGA_HORAS"]], 
+                     use_container_width=True, hide_index=True)
+        
+        st.info("""
+        📖 **Legenda:**
+        - ✅ IMPRESSO = Já foi emitido
+        - ⬜ PENDENTE = Ainda precisa ser emitido
+        - 📅 TREINAMENTOS = Conta cada DATA única (1 dia = 1 treinamento)
+        
+        ✅ Nomes em ordem alfabética de A a Z!
+        """)
