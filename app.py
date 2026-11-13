@@ -1,10 +1,5 @@
 # =================================================================
 # GERADOR DE MEMORANDOS — HOSPITAL DA CIDADE DR. JACKSON LAGO
-# ✅ Leitura de totais das colunas AN/AO/AP
-# ✅ Abas: Pendentes e Enviados
-# ✅ Itens Enviados riscados (tachados)
-# ✅ E-mails e Gestores completos
-# ✅ Erro de sintaxe corrigido
 # =================================================================
 
 import pandas as pd
@@ -47,7 +42,7 @@ def data_por_extenso(dt):
     return f"{dt.day} de {meses[dt.month-1]} de {dt.year}"
 
 # =================================================================
-# 📧 E-MAILS — Lista completa
+# E-MAILS
 # =================================================================
 def buscar_email_setor(setor_notificado):
     if not setor_notificado or str(setor_notificado).strip() == "":
@@ -86,11 +81,10 @@ def buscar_email_setor(setor_notificado):
     for chave, email in emails.items():
         if chave == nome or chave in nome or nome in chave:
             return email
-    
     return "nspsoc2@gmail.com"
 
 # =================================================================
-# 👤 GESTORES — Lista completa
+# GESTORES
 # =================================================================
 def buscar_gestor(setor_notificado):
     if not setor_notificado or str(setor_notificado).strip() == "":
@@ -129,7 +123,6 @@ def buscar_gestor(setor_notificado):
     for chave, gestor in gestores.items():
         if chave == nome or chave in nome or nome in chave:
             return gestor
-    
     return ""
 
 def substituir_texto_no_docx(doc, dados):
@@ -159,7 +152,7 @@ def gerar_docx(dados):
         return None
 
 # =================================================================
-# 🖥️ INTERFACE PRINCIPAL
+# INTERFACE PRINCIPAL
 # =================================================================
 
 st.set_page_config(page_title="Emissor de Memorandos", page_icon="📄", layout="wide")
@@ -172,22 +165,18 @@ if arquivo_excel:
     try:
         df = pd.read_excel(arquivo_excel, engine="openpyxl")
         
-        # ✅ Garantir coluna de Status
         if 'Status' not in df.columns:
             df.insert(1, 'Status', 'PENDENTE')
         
-        # 📊 Resumo — Lendo colunas AN/AO/AP da planilha
         total = len(df)
         enviados = df['Status'].apply(lambda x: str(x).strip().upper() == "ENVIADO").sum()
         pendentes = total - enviados
         
-        # Tenta usar os totais manuais da planilha se existirem
         try:
             cols = list(df.columns)
             an_idx = cols.index('AN') if 'AN' in cols else -1
             ao_idx = cols.index('AO') if 'AO' in cols else -1
             ap_idx = cols.index('AP') if 'AP' in cols else -1
-            
             if an_idx >= 0 and ao_idx >= 0 and ap_idx >= 0:
                 an_val = pd.to_numeric(df.iloc[0, an_idx], errors='coerce')
                 ao_val = pd.to_numeric(df.iloc[0, ao_idx], errors='coerce')
@@ -209,28 +198,21 @@ if arquivo_excel:
         
         data_atual = datetime.now()
         data_extenso = data_por_extenso(data_atual)
-        
         output_planilha = io.BytesIO()
         
-        # 📂 CRIA AS ABAS
         aba_pendentes, aba_enviados = st.tabs(["⏳ PENDENTES", "✅ ENVIADOS"])
-        
-        # Coleta todos os itens primeiro para separar nas abas
         todos_itens = []
         
         for idx, linha in df.iterrows():
             num_notificacao = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
             if not num_notificacao or num_notificacao.upper() == "Nº" or "NOTIF" in str(num_notificacao).upper():
                 continue
-            
             num_memorando = tratar_texto(linha.iloc[15]) if len(linha) > 15 else ""
             if not num_memorando:
                 continue
-            
             nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else ""
             status_atual = tratar_texto(linha.get('Status', '')).upper()
             enviado_bool = (status_atual == "ENVIADO")
-            
             todos_itens.append({
                 'idx': idx,
                 'num_notificacao': num_notificacao,
@@ -240,25 +222,20 @@ if arquivo_excel:
                 'linha': linha
             })
         
-        # ==============================================
-        # ABA 1: PENDENTES
-        # ==============================================
+        # ABA PENDENTES
         with aba_pendentes:
             st.markdown("### 📋 Memorandos Pendentes")
             tem_pendentes = False
-            
             for item in todos_itens:
                 if item['enviado']:
                     continue
                 tem_pendentes = True
-                
                 idx = item['idx']
                 linha = item['linha']
                 num_notificacao = item['num_notificacao']
                 num_memorando = item['num_memorando']
                 nome_paciente = item['nome_paciente']
                 
-                # 📅 Dados
                 data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
                 data_notificacao = formatar_data_sem_hora(linha.iloc[3]) if len(linha) > 3 else ""
                 turno = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
@@ -275,9 +252,9 @@ if arquivo_excel:
                 t = "☑" if "TARDE" in turno.upper() else "☐"
                 n = "☑" if "NOITE" in turno.upper() else "☐"
                 
-                               gestor = buscar_gestor(setor_notificado)
+                gestor = buscar_gestor(setor_notificado)
                 email_destino = buscar_email_setor(setor_notificado)
-
+                
                 hora_atual = datetime.now().hour
                 if 6 <= hora_atual < 12:
                     saudacao = "Bom dia,"
@@ -285,8 +262,30 @@ if arquivo_excel:
                     saudacao = "Boa tarde,"
                 else:
                     saudacao = "Boa noite,"
-
-                corpo_email = f"""
+                
+                titulo_memo = f"📋 Notificação Nº {num_notificacao} — {nome_paciente}"
+                with st.expander(titulo_memo, expanded=True):
+                    marcado = st.checkbox(
+                        "✅ Já enviei este memorando",
+                        value=False,
+                        key=f"check_pend_{num_notificacao}_{num_memorando}_{idx}"
+                    )
+                    if marcado:
+                        df.at[idx, 'Status'] = 'ENVIADO'
+                        st.success("✅ Movido para a aba ENVIADOS! Salve a planilha para manter a alteração.")
+                    st.divider()
+                    st.write(f"📅 Data de Emissão: {data_extenso}")
+                    st.write(f"📅 Data da Ocorrência: {data_ocorrencia} | Notificação: {data_notificacao}")
+                    st.write(f"📍 Local: {localizacao}")
+                    st.write(f"🏛️ Setor Notificante: {setor_notificante}")
+                    st.write(f"📤 Setor Notificado: {setor_notificado}")
+                    st.write(f"👤 Gestor: {gestor}")
+                    st.write(f"⚠️ Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
+                    st.write(f"👤 Paciente: {nome_paciente} | Leito: {leito}")
+                    st.write(f"💡 Sugestão: {sugestao}")
+                    st.write(f"📧 E-mail para envio: {email_destino}")
+                    
+                    corpo_email = f"""
 {saudacao} Prezado(a),
 
 Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
@@ -301,38 +300,35 @@ Ezequias S. Santos
 Agente Administrativo — NAQH / NSP
 Núcleo de Segurança do Paciente
 nspsoc2@gmail.com
-                """
-
-                with st.expander("Texto do E-mail"):
-                    st.text(corpo_email.strip())
-
-                dados_docx = {
-                    "{{numero_memorando}}": num_memorando,
-                    "{{notificacao_n}}": num_notificacao,
-                    "{{gestor}}": gestor,
-                    "{{setor_notificado}}": setor_notificado,
-                    "{{setor_notificante}}": setor_notificante,
-                    "{{data_envio}}": data_extenso,
-                    "{{data_ocorrencia}}": data_ocorrencia,
-                    "{{data_notificacao}}": data_notificacao,
-                    "{{m}}": m,
-                    "{{t}}": t,
-                    "{{n}}": n,
-                    "{{localizacao}}": localizacao,
-                    "{{tipo_incidente}}": tipo_incidente,
-                    "{{classificacao_incidente}}": classificacao_incidente,
-                    "{{descricao_notificacao}}": descricao_notificacao,
-                    "{{nome_paciente}}": nome_paciente,
-                    "{{leito}}": leito,
-                    "{{sugestao}}": sugestao,
-                }
-
-                arquivo_pronto = gerar_docx(dados_docx)
-                if arquivo_pronto:
-                    st.download_button(
-                        label="📄 Baixar Memorando",
-                        data=arquivo_pronto,
-                        file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"download_pend_{num_notificacao}_{num_memorando}_{idx}"
-                    )
+                    """
+                    with st.expander("Texto do E-mail"):
+                        st.text(corpo_email.strip())
+                    
+                    dados_docx = {
+                        "{{numero_memorando}}": num_memorando,
+                        "{{notificacao_n}}": num_notificacao,
+                        "{{gestor}}": gestor,
+                        "{{setor_notificado}}": setor_notificado,
+                        "{{setor_notificante}}": setor_notificante,
+                        "{{data_envio}}": data_extenso,
+                        "{{data_ocorrencia}}": data_ocorrencia,
+                        "{{data_notificacao}}": data_notificacao,
+                        "{{m}}": m,
+                        "{{t}}": t,
+                        "{{n}}": n,
+                        "{{localizacao}}": localizacao,
+                        "{{tipo_incidente}}": tipo_incidente,
+                        "{{classificacao_incidente}}": classificacao_incidente,
+                        "{{descricao_notificacao}}": descricao_notificacao,
+                        "{{nome_paciente}}": nome_paciente,
+                        "{{leito}}": leito,
+                        "{{sugestao}}": sugestao,
+                    }
+                    
+                    arquivo_pronto = gerar_docx(dados_docx)
+                    if arquivo_pronto:
+                        st.download_button(
+                            label="📄 Baixar Memorando",
+                            data=arquivo_pronto,
+                            file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
+                            mime="application/vnd.openxmlformats-officedocument
