@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Final: Todos visíveis + Riscado + Contagem Correta de Memorandos
+# Versão Final: Lista Completa de E-mails + Contagem Correta
 # =================================================================
 
 import os
@@ -12,41 +12,92 @@ from docx import Document
 import plotly.express as px
 
 # =================================================================
-# 📚 LISTA DE E-MAILS DOS SETORES
+# 📚 LISTA COMPLETA DE E-MAILS — 86 Setores
 # =================================================================
 LISTA_SETORES = [
-    ("ALA A", "alaaclinicamedica@gmail.com"),
-    ("ALA B", "alab.hcid@gmail.com"),
-    ("ALA C", "cirurgica.hcid@gmail.com"),
-    ("ALA D", "ortopediaalad.hcid@gmail.com"),
-    ("ALA F (UTI B)", "utihcid@gmail.com"),
-    ("ALA G/H", "aladgh.hcid@gmail.com"),
-    ("ALA I", "ortopediaalai.hcid@gmail.com"),
-    ("ALA J", "ortopediaalaj.hcid@gmail.com"),
-    ("ALA L", "alalortopedia.hcid@gmail.com"),
-    ("CENTRO CIRÚRGICO", "centrocirurgicosoc2@gmail.com"),
-    ("CCIH", "ccih.hcid@gmail.com"),
-    ("DIREÇÃO TÉCNICA", "direcaotecnica.hcid@gmail.com"),
-    ("DIREÇÃO", "direcao.hospitaldacidade@gmail.com"),
-    ("ECP", "carlosemilioecp@gmail.com"),
-    ("ECP - EQUIPE DE CUIDADOS COM A PELE", "fisioreabsoc2@gmail.com"),
-    ("ENDOSCOPIA", "endoscopiasoc2@gmail.com"),
-    ("FISIOTERAPIA", "fisioterapiasocorrao@gmail.com"),
-    ("FARMACIA", "farmacia.hcid@gmail.com"),
-    ("FARMACOVIGILÂNCIA", "farmacovigilanciahcid@gmail.com"),
-    ("GESTOR DE ENFERMAGEM", "gerenciadeenf.hcid@gmail.com"),
-    ("HOTELARIA", "hotelaria.hcid@gmail.com"),
-    ("NIR", "coordenanirs2@gmail.com"),
-    ("NSP", "nspsoc2@gmail.com"),
-    ("NÚCLEO INTERNO DE REGULAÇÃO DE LEITOS", "coordenanirs2@gmail.com"),
-    ("SADT", "sadthosp@gmail.com"),
-    ("SALA VERMELHA", "salavermelhasdm@gmail.com"),
-    ("SERVIÇO SOCIAL", "servicosocialhcid@gmail.com"),
-    ("SAET", "coodsaet2026@gmail.com"),
-    ("SETOR DE IMAGEM", "sadt.hosp@gmail.com"),
-    ("TERAPIA OCUPACIONAL", "terapiaocupacional.hcid@gmail.com"),
-    ("EMTN - EQUIPE", "emtnhospitaldacidade@gmail.com"),
-    ("SOM - EQUIPE DE CUIDADOS MÉDICA", "sadm.hcid@gmail.com"),
+    ("1. DIREÇÃO", "direcao.hospitaldacidade@gmail.com"),
+    ("2. GABINETE DA DIREÇÃO", "gabinete.hospitaldacidade@gmail.com"),
+    ("3. AGÊNCIA TRANSFUSIONAL", "agenciatransfusional.hcid@gmail.com"),
+    ("4. ALA A - ENFERMAGEM", "alaaclinicamedica@gmail.com"),
+    ("5. ALA B - ENFERMAGEM", "alab.hcid@gmail.com"),
+    ("6. ALA C - ENFERMAGEM", "cirurgica.hcid@gmail.com"),
+    ("7. ALA D - ENFERMAGEM", "ortopediaalad.hcid@gmail.com"),
+    ("8. ALA G/H", "aladgh.hcid@gmail.com"),
+    ("9. ALA E - ENFERMAGEM", "Ala não existe"),
+    ("10. ALA F - ENFERMAGEM", "utihcid@gmail.com"),
+    ("11. ALA I - ENFERMAGEM", "ortopediaalai.hcid@gmail.com"),
+    ("12. ALA J - ENFERMAGEM", "ortopediaalaj.hcid@gmail.com"),
+    ("13. ALA L - ENFERMAGEM", "alalortopedia.hcid@gmail.com"),
+    ("14. ALMOXARIFADO", "almoxarifadosocorrao2@gmail.com"),
+    ("15. AMBULATÓRIO", "ambulatorio.hcid@gmail.com"),
+    ("16. ASSESSORIA JURÍDICA", "fernandoacmoares.advogado@gmail.com"),
+    ("17. CAC", "cac.socorrao2@gmail.com"),
+    ("18. CENTRAL DE CÓPIAS", "centraldecopias.hcid@gmail.com"),
+    ("19. CCIH", "ccih.hcid@gmail.com"),
+    ("20. CENTRO CIRÚRGICO - ENFERMAGEM", "centrocirurgicosoc2@gmail.com"),
+    ("21. COMISSÃO DE ÓBITOS", "comissaodeobito.hdacidade@gmail.com"),
+    ("22. COMISSÃO DE ÉTICA EM ENFERMAGEM", "comissaodeetica.soc2@gmail.com"),
+    ("23. CME", "cmeesterilizacao@gmail.com"),
+    ("24. COMISSÃO DE ÉTICA MÉDICA", "cmeesterilizacao@gmail.com"),
+    ("25. COMISSÃO DE CUIDADOS PALIATIVOS", "utihcid@gmail.com"),
+    ("26. COMISSÃO DE REVISÃO DE PRONTUÁRIO", "documentos.soc2@gmail.com"),
+    ("27. CENTRAL DE TRANSPORTE INTRA HOSPITALAR", "documentos.soc2@gmail.com"),
+    ("28. DOCUMENTOS INSTITUCIONAIS (NAQH)", "documentos.soc2@gmail.com"),
+    ("29. ECP", "carlosemilioecp@gmail.com"),
+    ("30. ENDOSCOPIA", "endoscopiasoc2@gmail.com"),
+    ("31. EDOT", "edot.hcid@gmail.com"),
+    ("32. EMTN", "emtnhospitaldacidade@gmail.com"),
+    ("33. ESCALAS", "escalas.hcid25@gmail.com"),
+    ("34. FARMÁCIA", "farmacia.hcid@gmail.com"),
+    ("35. FARMACOVIGILÂNCIA", "farmacovigilanciahcid@gmail.com"),
+    ("36. FATURAMENTO", "contasmedicassocorrao2@gmail.com"),
+    ("37. FISIOTERAPIA / PS - ENFERMARIAS", "fisioreabsoc2@gmail.com"),
+    ("38. FISIOTERAPIA - UTI", "fisioterapiasocorrao@gmail.com"),
+    ("39. FONOAUDIOLOGIA", "fonosocorrao2@yahoo.com"),
+    ("40. GERÊNCIA DE ENFERMAGEM", "gerenciadeenf.hcid@gmail.com"),
+    ("41. GERÊNCIA DA REABILITAÇÃO", "gerenciareab.hcid@gmail.com"),
+    ("42. GERENCIAMENTO DE RESÍDUOS", "residuos.hcid@gmail.com"),
+    ("43. HOTELARIA", "hotelaria.hcid@gmail.com"),
+    ("44. LABORATÓRIO", "hcid.laboratorio@gmail.com"),
+    ("45. MANUTENÇÃO", "manutencao.hcid@gmail.com"),
+    ("46. MAQUEIROS", "centraltransporte.hcid@gmail.com"),
+    ("47. NAQH", "naqhsoc2@gmail.com"),
+    ("48. NCE", "ce.socorrao2@gmail.com"),
+    ("49. NEP", "nep.hcid@gmail.com"),
+    ("50. NEPEX", "nepexhcid@gmail.com"),
+    ("51. NIR", "coordenanirs2@gmail.com"),
+    ("52. NSP", "nspsoc2@gmail.com"),
+    ("53. NUTRIÇÃO", "nutricaohospitaldacidade@gmail.com"),
+    ("54. NVE", "nhe.hcid@gmail.com"),
+    ("55. ODONTOLOGIA", "robertapalacioferes@gmail.com"),
+    ("56. OUVIDORIA", "ouvidoriahcid@gmail.com"),
+    ("57. PARECER DE EXAMES", "coodsaet2026@gmail.com"),
+    ("58. PATRIMÔNIO", "patrimonio.hcid@gmail.com"),
+    ("59. PORTARIA", "portaria.hcid@gmail.com"),
+    ("60. RECURSOS HUMANOS", "setorpessoal.hcid@gmail.com"),
+    ("61. ROUPARIA", "rouparia.hcid@gmail.com"),
+    ("62. SAEEM", "saeem.hcid@gmail.com"),
+    ("63. SAME", "same25.hcid@gmail.com"),
+    ("64. SAET", "coodsaet2026@gmail.com"),
+    ("65. SADT", "sadthosp@gmail.com"),
+    ("66. SDM/VERMELHA - ENFERMAGEM", "salavermelhasdm@gmail.com"),
+    ("67. SERVIÇO SOCIAL", "servicosocialhcid@gmail.com"),
+    ("68. SETOR DE IMAGEM", "sadt.hosp@gmail.com"),
+    ("69. TECNOLOGIA DA INFORMAÇÃO", "suporteti.hcid@gmail.com"),
+    ("70. TERAPIA OCUPACIONAL", "terapiaocupacional.hcid@gmail.com"),
+    ("71. TRANSPORTE EXTERNO", "centraltransporte.hcid@gmail.com"),
+    ("72. UNIDADE SENTINELA", "unidadesentinela@gmail.com"),
+    ("73. UTI A - MÉDICOS", "pedrohfrota@gmail.com"),
+    ("74. UTI B - MÉDICOS", "livia.goreth@ufma.br"),
+    ("75. UTI C - MÉDICOS", "hugogama19@hotmail.com"),
+    ("76. ORTOPEDIA - MÉDICOS", "abraaojunior@hotmail.com"),
+    ("77. PRONTO SOCORRO - MÉDICOS", "gustavo1422@hotmail.com"),
+    ("78. ALA A - MÉDICOS", "kledsonmarques10@gmail.com"),
+    ("79. ALA B - MÉDICOS", "aliomarcamaradecarvalho@gmail.com"),
+    ("80. CENTRO CIRÚRGICO - MÉDICOS", "felipeabreu805@gmail.com"),
+    ("81. CARDIOLOGIA - MÉDICOS", "jordach.xerez@gmail.com"),
+    ("82. ANESTESISTAS - MÉDICO", "rafaelcbarrosneto@yahoo.com.br"),
+    ("83. XEROX/REPROGRAFIA", "centraldecopias.hcid@gmail.com"),
 ]
 
 df_setores = pd.DataFrame(LISTA_SETORES, columns=["SETOR", "E-MAIL"])
@@ -229,7 +280,6 @@ def coletar_todos_memorandos(df):
         status = tratar_texto(linha.iloc[1]) if len(linha) > 1 else ""
         dt_notif = formatar_data_br(linha.iloc[3]) if len(linha) > 3 else ""
         
-        # 4 blocos por linha = até 4 memorandos por registro
         for g_col, s_col, m_col in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
             num_memo = limpar_numero(linha.iloc[m_col]) if m_col < len(linha) else ""
             setor = tratar_texto(linha.iloc[s_col]) if s_col < len(linha) else ""
@@ -284,58 +334,3 @@ with aba_processar:
             for idx, linha in df.iterrows():
                 num_notif = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
                 if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
-                    continue
-                
-                nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else "Paciente"
-                if nome_paciente.upper() == "PACIENTE":
-                    continue
-                
-                dt_ocorr = formatar_data_br(linha.iloc[2]) if len(linha) > 2 else ""
-                dt_notif = formatar_data_br(linha.iloc[3]) if len(linha) > 3 else ""
-                local = tratar_texto(linha.iloc[5]) if len(linha) > 5 else ""
-                tipo = tratar_texto(linha.iloc[6]) if len(linha) > 6 else ""
-                classificacao = tratar_texto(linha.iloc[7]) if len(linha) > 7 else ""
-                desc = tratar_texto(linha.iloc[8]) if len(linha) > 8 else ""
-                leito = limpar_numero(linha.iloc[10]) if len(linha) > 10 else ""
-                setor_notificante = tratar_texto(linha.iloc[11]) if len(linha) > 11 else ""
-                sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
-                turno_bruto = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
-                status_linha = tratar_texto(linha.iloc[1]).upper() if len(linha) > 1 else "PENDENTE"
-                
-                # Processar os 4 blocos
-                blocos = []
-                for g, s, m in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
-                    b = processar_bloco(linha, "Memorando", idx, nome_paciente, data_extenso,
-                                        g, s, m, dt_ocorr, dt_notif, local, tipo, classificacao,
-                                        desc, leito, setor_notificante, sugestao, turno_bruto)
-                    if b:
-                        blocos.append(b)
-                
-                if not blocos:
-                    continue
-                
-                # Cabeçalho da notificação
-                if status_linha == "ENVIADO":
-                    st.markdown(f"~~📋 Notificação {num_notif} — {nome_paciente}~~ ✅ **ENVIADO**")
-                else:
-                    st.subheader(f"📋 Notificação {num_notif} — {nome_paciente}")
-                
-                for b in blocos:
-                    memo_nome = b['num_memo']
-                    memo_setor = b['setor']
-                    memo_status = b['status']
-                    
-                    if memo_status == "ENVIADO":
-                        st.markdown(f"~~📄 Memorando Nº {memo_nome} — {memo_setor}~~ ✅ **ENVIADO**")
-                    else:
-                        with st.expander(f"📄 Memorando Nº {memo_nome} — {memo_setor} — ⏳ PENDENTE"):
-                            st.write(f"**Gestor:** {b['gestor']}")
-                            if b['email']:
-                                st.info(f"📧 E-mail: {b['email']}")
-                            else:
-                                st.warning("⚠️ E-mail não encontrado")
-                            
-                            docx_bytes = gerar_docx(b['dados_docx'])
-                            if docx_bytes:
-                                # ✅ STRING FECHADA CORRETAMENTE AQUI
-                                nome_arquivo
