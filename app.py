@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Estável: Simplificada e Corrigida
+# Versão com todos os campos do modelo oficial
 # =================================================================
 
 import pandas as pd
@@ -174,6 +174,29 @@ if arquivo_excel:
             
             status_registro = tratar_texto(linha.iloc[1]).upper() if len(linha) > 1 else "PENDENTE"
             
+            # Extrair todos os campos do Excel
+            data_ocorrencia = tratar_texto(linha.iloc[2]) if len(linha) > 2 else ""
+            data_notificacao = tratar_texto(linha.iloc[3]) if len(linha) > 3 else ""
+            turno = tratar_texto(linha.iloc[4]).upper() if len(linha) > 4 else ""
+            localizacao = tratar_texto(linha.iloc[5]) if len(linha) > 5 else ""
+            tipo_incidente = tratar_texto(linha.iloc[6]) if len(linha) > 6 else ""
+            classificacao_incidente = tratar_texto(linha.iloc[7]) if len(linha) > 7 else ""
+            descricao_notificacao = tratar_texto(linha.iloc[8]) if len(linha) > 8 else ""
+            leito = tratar_texto(linha.iloc[10]) if len(linha) > 10 else ""
+            setor_notificante = tratar_texto(linha.iloc[11]) if len(linha) > 11 else ""
+            sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
+            
+            # Definir marcações de turno
+            m_manha = "☐"
+            m_tarde = "☐"
+            m_noite = "☐"
+            if "MANHÃ" in turno or "MANHA" in turno:
+                m_manha = "☑"
+            elif "TARDE" in turno:
+                m_tarde = "☑"
+            elif "NOITE" in turno:
+                m_noite = "☑"
+            
             blocos_memo = []
             for g_col, s_col, m_col in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
                 if m_col >= len(linha):
@@ -198,18 +221,24 @@ if arquivo_excel:
             
             qtd_processados += 1
             with st.expander(f"📋 Notificação {num_notif} — {nome_paciente} ({len(blocos_memo)} memo(s))", expanded=True):
-                st.write(f"📅 Data: {data_extenso}")
+                st.write(f"📅 Data de Emissão: {data_extenso}")
+                st.write(f"📌 Data da Ocorrência: {data_ocorrencia} | 📌 Data da Notificação: {data_notificacao}")
+                st.write(f"📍 Local: {localizacao} | 🏥 Setor Notificante: {setor_notificante}")
+                st.write(f"⚠️ Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
+                st.write(f"🛏️ Leito: {leito} | 🔄 Turno: {turno}")
+                if sugestao:
+                    st.write(f"💡 Sugestão: {sugestao}")
                 
                 for b in blocos_memo:
                     email_destino = buscar_email_setor(b["setor"])
-                    st.subheader(f"📄 Memorando Nº {b['num_memo']}/{ano_atual}")
-                    st.write(f"**Setor:** {b['setor']} | **Gestor:** {b['gestor']}")
+                    st.subheader(f"📄 MEMO: NSP Nº {b['num_memo']}/{ano_atual}")
+                    st.write(f"**Para:** {b['gestor']} da {b['setor']} | **Assunto:** Nº {num_notif}")
                     st.info(f"📧 E-mail: {email_destino}")
                     
                     # Texto do e-mail
                     corpo_email = f"""Boa Tarde, Prezados, ou bom dia de acordo com o horário.
 
-Segue em anexo o Memorando Nº {b['num_memo']}/{ano_atual} para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.
+Segue em anexo o Memorando Nº {b['num_memo']}/{ano_atual} referente à notificação Nº {num_notif}, para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.
 
 ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de Word ou PDF para arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens via e-mail sem arquivo como resposta.
 
@@ -222,14 +251,26 @@ nspsoc2@gmail.com
                     with st.expander("✉️ Texto do E-mail"):
                         st.text(corpo_email)
                     
-                    # Dados para o Word
+                    # Todos os campos para substituir no Word
                     dados_docx = {
                         "{{numero_memorando}}": f"{b['num_memo']}/{ano_atual}",
+                        "{{assunto_numero}}": num_notif,
                         "{{gestor}}": b["gestor"],
-                        "{{setor}}": b["setor"],
-                        "{{notificacao_n}}": num_notif,
-                        "{{nome_paciente}}": nome_paciente,
-                        "{{data_envio}}": data_extenso,
+                        "{{setor_destino}}": b["setor"],
+                        "{{data_ocorrencia}}": data_ocorrencia,
+                        "{{data_notificacao}}": data_notificacao,
+                        "{{m}}": m_manha,
+                        "{{t}}": m_tarde,
+                        "{{n}}": m_noite,
+                        "{{localizacao}}": localizacao,
+                        "{{tipo_incidente}}": tipo_incidente,
+                        "{{classificacao_incidente}}": classificacao_incidente,
+                        "{{descricao_notificacao}}": descricao_notificacao,
+                        "{{paciente}}": nome_paciente,
+                        "{{leito}}": leito,
+                        "{{setor_notificante}}": setor_notificante,
+                        "{{sugestao}}": sugestao,
+                        "{{data_extenso}}": data_extenso,
                     }
                     
                     arquivo_docx = gerar_docx(dados_docx)
@@ -237,7 +278,7 @@ nspsoc2@gmail.com
                         st.download_button(
                             label="📄 Baixar Memorando (DOCX)",
                             data=arquivo_docx,
-                            file_name=f"MEMORANDO_{b['num_memo']}_{ano_atual}.docx",
+                            file_name=f"NSP_{b['num_memo']}_{ano_atual}.docx",
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         )
                     st.divider()
