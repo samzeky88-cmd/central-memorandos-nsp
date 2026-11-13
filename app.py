@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão com todos os campos do modelo oficial
+# Versão Final Completa: Todos os Campos + Formato Datas
 # =================================================================
 
 import pandas as pd
@@ -10,48 +10,108 @@ from datetime import datetime
 from docx import Document
 
 # =================================================================
-# 📌 CONFIGURAÇÕES FIXAS
+# 📌 VALORES FIXOS
 # =================================================================
 TOTAL_GERAL_MEMORANDOS = 964
 
 # =================================================================
-# 📚 LISTA DE E-MAILS
+# 📚 LISTA COMPLETA DE E-MAILS — TODOS OS SETORES
 # =================================================================
 LISTA_SETORES = [
-    ("SALA VERMELHA", "salavermelhasdm@gmail.com"),
-    ("SDM/VERMELHA", "salavermelhasdm@gmail.com"),
-    ("FISIOTERAPIA", "fisioreabsoc2@gmail.com"),
-    ("FISIOTERAPIA INTERNAÇÃO/PS", "fisioreabsoc2@gmail.com"),
-    ("CENTRAL DE TRANSPORTE", "centraltransporte.hcid@gmail.com"),
-    ("CENTRAL INTERNA DE TRANSPORTE", "centraltransporte.hcid@gmail.com"),
+    ("DIREÇÃO", "direcao.hospitaldacidade@gmail.com"),
+    ("GABINETE DA DIREÇÃO", "gabinete.hospitaldacidade@gmail.com"),
+    ("AGÊNCIA TRANSFUSIONAL", "agenciatransfusional.hcid@gmail.com"),
     ("ALA A", "alaaclinicamedica@gmail.com"),
+    ("ALA A - ENFERMAGEM", "alaaclinicamedica@gmail.com"),
     ("ALA B", "alab.hcid@gmail.com"),
+    ("ALA B - ENFERMAGEM", "alab.hcid@gmail.com"),
     ("ALA C", "cirurgica.hcid@gmail.com"),
+    ("ALA C - ENFERMAGEM", "cirurgica.hcid@gmail.com"),
     ("ALA D", "ortopediaalad.hcid@gmail.com"),
-    ("ALA F", "utihcid@gmail.com"),
+    ("ALA D - ENFERMAGEM", "ortopediaalad.hcid@gmail.com"),
     ("ALA G/H", "aladgh.hcid@gmail.com"),
+    ("ALA F", "utihcid@gmail.com"),
+    ("ALA F - ENFERMAGEM", "utihcid@gmail.com"),
     ("ALA I", "ortopediaalai.hcid@gmail.com"),
+    ("ALA I - ENFERMAGEM", "ortopediaalai.hcid@gmail.com"),
     ("ALA J", "ortopediaalaj.hcid@gmail.com"),
+    ("ALA J - ENFERMAGEM", "ortopediaalaj.hcid@gmail.com"),
     ("ALA L", "alalortopedia.hcid@gmail.com"),
-    ("NSP", "nspsoc2@gmail.com"),
+    ("ALA L - ENFERMAGEM", "alalortopedia.hcid@gmail.com"),
+    ("ALMOXARIFADO", "almoxarifadosocorrao2@gmail.com"),
+    ("AMBULATÓRIO", "ambulatorio.hcid@gmail.com"),
+    ("ASSESSORIA JURÍDICA", "fernandoacmoraes.advogado@gmail.com"),
+    ("CAC", "cac.socorrao2@gmail.com"),
+    ("CENTRAL DE CÓPIAS", "centraldecopias.hcid@gmail.com"),
+    ("CCIH", "ccih.hcid@gmail.com"),
+    ("CENTRO CIRÚRGICO", "centrocirurgicosoc2@gmail.com"),
+    ("CENTRO CIRÚRGICO - ENFERMAGEM", "centrocirurgicosoc2@gmail.com"),
+    ("COMISSÃO DE ÓBITOS", "comissaodeobito.hdacidade@gmail.com"),
+    ("COMISSÃO DE ÉTICA EM ENFERMAGEM", "comissaodeetica.soc2@gmail.com"),
+    ("CME", "cmeesterilizacao@gmail.com"),
+    ("CENTRAL DE TRANSPORTE INTRA HOSPITALAR", "centraltransporte.hcid@gmail.com"),
+    ("CENTRAL INTERNA DE TRANSPORTE", "centraltransporte.hcid@gmail.com"),
+    ("TRANSPORTE EXTERNO", "centraltransporte.hcid@gmail.com"),
+    ("DOCUMENTOS INSTITUCIONAIS", "documentos.soc2@gmail.com"),
     ("NAQH", "naqhsoc2@gmail.com"),
-    ("SERVIÇO SOCIAL", "servicosocialhcid@gmail.com"),
+    ("ECP", "carlosemilioecp@gmail.com"),
+    ("ENDOSCOPIA", "endoscopiasoc2@gmail.com"),
+    ("EDOT", "edot.hcid@gmail.com"),
+    ("EMTN", "emtnhospitaldacidade@gmail.com"),
+    ("ESCALAS", "escalas.hcid25@gmail.com"),
+    ("FARMÁCIA", "farmacia.hcid@gmail.com"),
+    ("FARMACOVIGILÂNCIA", "farmacovigilanciahcid@gmail.com"),
+    ("FATURAMENTO", "contasmedicassocorrao2@gmail.com"),
+    ("FISIOTERAPIA", "fisioreabsoc2@gmail.com"),
+    ("FISIOTERAPIA / PS", "fisioreabsoc2@gmail.com"),
+    ("FISIOTERAPIA INTERNAÇÃO/PS", "fisioreabsoc2@gmail.com"),
+    ("FISIOTERAPIA - UTI", "fisioterapiasocorrao@gmail.com"),
+    ("FONOAUDIOLOGIA", "fonosocorrao2@yahoo.com"),
+    ("GERÊNCIA DE ENFERMAGEM", "gerenciadeenf.hcid@gmail.com"),
+    ("GESTOR DE ENFERMAGEM", "gerenciadeenf.hcid@gmail.com"),
+    ("GERÊNCIA DA REABILITAÇÃO", "gerenciareab.hcid@gmail.com"),
+    ("GERENCIAMENTO DE RESÍDUOS", "residuos.hcid@gmail.com"),
+    ("HOTELARIA", "hotelaria.hcid@gmail.com"),
+    ("LABORATÓRIO", "hcid.laboratorio@gmail.com"),
+    ("MANUTENÇÃO", "manutencao.hcid@gmail.com"),
+    ("MAQUEIROS", "centraltransporte.hcid@gmail.com"),
+    ("NCE", "nce.socorrao2@gmail.com"),
+    ("NEP", "nep.hcid@gmail.com"),
+    ("NEPEX", "nepexhcid@gmail.com"),
+    ("NIR", "coordenanirs2@gmail.com"),
+    ("NSP", "nspsoc2@gmail.com"),
+    ("NUTRIÇÃO", "nutricaohospitaldacidade@gmail.com"),
+    ("NVE", "nhe.hcid@gmail.com"),
+    ("NHE", "nhe.hcid@gmail.com"),
+    ("ODONTOLOGIA", "robertapalacioferes@gmail.com"),
+    ("OUVIDORIA", "ouvidoriahcid@gmail.com"),
+    ("PARECER DE EXAMES", "coodsaet2026@gmail.com"),
+    ("PATRIMÔNIO", "patrimonio.hcid@gmail.com"),
+    ("PORTARIA", "portaria.hcid@gmail.com"),
+    ("PSICOLOGIA", "psicologia.hcid@gmail.com"),
+    ("RECURSOS HUMANOS", "setorpessoal.hcid@gmail.com"),
+    ("ROUPARIA", "rouparia.hcid@gmail.com"),
+    ("SAEEM", "saeem.hcid@gmail.com"),
+    ("SAME", "same25.hcid@gmail.com"),
+    ("SAET", "coodsaet2026@gmail.com"),
     ("SADT", "sadthosp@gmail.com"),
     ("SETOR DE IMAGEM", "sadt.hosp@gmail.com"),
-    ("PRONTO SOCORRO", "gustavo1422@hotmail.com"),
-    ("CENTRO CIRÚRGICO", "centrocirurgicosoc2@gmail.com"),
-    ("FARMACIA", "farmacia.hcid@gmail.com"),
-    ("NIR", "coordenanirs2@gmail.com"),
-    ("HOTELARIA", "hotelaria.hcid@gmail.com"),
-    ("OUVIDORIA", "ouvidoriahcid@gmail.com"),
-    ("RECURSOS HUMANOS", "setorpessoal.hcid@gmail.com"),
-    ("SAME", "same25.hcid@gmail.com"),
-    ("PSICOLOGIA", "psicologia.hcid@gmail.com"),
+    ("SDM", "salavermelhasdm@gmail.com"),
+    ("SALA VERMELHA", "salavermelhasdm@gmail.com"),
+    ("SDM/VERMELHA", "salavermelhasdm@gmail.com"),
+    ("SERVIÇO SOCIAL", "servicosocialhcid@gmail.com"),
+    ("TECNOLOGIA DA INFORMAÇÃO", "suporteti.hcid@gmail.com"),
     ("TERAPIA OCUPACIONAL", "terapiaocupacional.hcid@gmail.com"),
-    ("EMTN", "emtnhospitaldacidade@gmail.com"),
-    ("ENDOSCOPIA", "endoscopiasoc2@gmail.com"),
-    ("FARMACOVIGILÂNCIA", "farmacovigilanciahcid@gmail.com"),
-    ("GESTOR DE ENFERMAGEM", "gerenciadeenf.hcid@gmail.com"),
+    ("UNIDADE SENTINELA", "unidadesentinela@gmail.com"),
+    ("UTI A", "pedrohfrota@gmail.com"),
+    ("UTI B", "livia.goreth@ufma.br"),
+    ("UTI C", "hugogama19@hotmail.com"),
+    ("ORTOPEDIA", "abraaojunior@hotmail.com"),
+    ("PRONTO SOCORRO", "gustavo1422@hotmail.com"),
+    ("CARDIOLOGIA", "jordach.xerez@gmail.com"),
+    ("ANESTESISTAS", "rafaelcbarrosneto@yahoo.com.br"),
+    ("XEROX", "centraldecopias.hcid@gmail.com"),
+    ("REPROGRAFIA", "centraldecopias.hcid@gmail.com"),
 ]
 
 df_setores = pd.DataFrame(LISTA_SETORES, columns=["SETOR", "E-MAIL"])
@@ -61,7 +121,7 @@ df_setores = df_setores[df_setores["E-MAIL"].str.strip() != ""].reset_index(drop
 # 🎯 CONFIGURAÇÃO DA PÁGINA
 # =================================================================
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
-st.title("📄 Emissor de Memorandos — Hospital da Cidade")
+st.title("📄 Emissor de Memorandos — Hospital da Cidade Dr. Jackson Lago")
 st.divider()
 
 # =================================================================
@@ -82,17 +142,28 @@ def limpar_numero(valor):
     except:
         return str(valor)
 
+def formatar_data_sem_hora(valor):
+    """Converte qualquer data para DD/MM/AAAA — sem horas!"""
+    if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().upper() == "NAN":
+        return ""
+    try:
+        dt = pd.to_datetime(valor)
+        return dt.strftime("%d/%m/%Y")
+    except:
+        return str(valor).strip().split(" ")[0]
+
 def data_por_extenso(dt):
     meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     return f"{dt.day} de {meses[dt.month-1]} de {dt.year}"
 
 def buscar_email_setor(nome_setor):
-    if not nome_setor:
+    if not nome_setor or str(nome_setor).strip() == "":
         return "nspsoc2@gmail.com"
     nome_upper = str(nome_setor).strip().upper()
     for _, linha in df_setores.iterrows():
-        if nome_upper in linha["SETOR"].upper() or linha["SETOR"].upper() in nome_upper:
+        setor_upper = linha["SETOR"].upper()
+        if nome_upper in setor_upper or setor_upper in nome_upper:
             return linha["E-MAIL"]
     return "nspsoc2@gmail.com"
 
@@ -119,7 +190,7 @@ def gerar_docx(dados):
         st.error("❌ Arquivo modelo_memorando.docx não encontrado!")
         return None
     except Exception as e:
-        st.error(f"❌ Erro: {str(e)}")
+        st.error(f"❌ Erro ao gerar arquivo: {str(e)}")
         return None
 
 def contar_enviados(df):
@@ -168,15 +239,15 @@ if arquivo_excel:
             if not num_notif or num_notif.upper() == "STATUS" or "NOTIF" in str(num_notif).upper():
                 continue
             
-            nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else "Paciente"
+            nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else ""
             if nome_paciente.upper() == "PACIENTE":
                 continue
             
             status_registro = tratar_texto(linha.iloc[1]).upper() if len(linha) > 1 else "PENDENTE"
             
-            # Extrair todos os campos do Excel
-            data_ocorrencia = tratar_texto(linha.iloc[2]) if len(linha) > 2 else ""
-            data_notificacao = tratar_texto(linha.iloc[3]) if len(linha) > 3 else ""
+            # ✅ TODOS OS CAMPOS — COM DATAS FORMATADAS SEM HORA
+            data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
+            data_notificacao = formatar_data_sem_hora(linha.iloc[3]) if len(linha) > 3 else ""
             turno = tratar_texto(linha.iloc[4]).upper() if len(linha) > 4 else ""
             localizacao = tratar_texto(linha.iloc[5]) if len(linha) > 5 else ""
             tipo_incidente = tratar_texto(linha.iloc[6]) if len(linha) > 6 else ""
@@ -186,16 +257,17 @@ if arquivo_excel:
             setor_notificante = tratar_texto(linha.iloc[11]) if len(linha) > 11 else ""
             sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
             
-            # Definir marcações de turno
+            # ✅ MARCAÇÃO DE TURNO CORRIGIDA
             m_manha = "☐"
             m_tarde = "☐"
             m_noite = "☐"
-            if "MANHÃ" in turno or "MANHA" in turno:
-                m_manha = "☑"
-            elif "TARDE" in turno:
-                m_tarde = "☑"
-            elif "NOITE" in turno:
-                m_noite = "☑"
+            if turno:
+                if "MANHÃ" in turno or "MANHA" in turno:
+                    m_manha = "☑"
+                elif "TARDE" in turno:
+                    m_tarde = "☑"
+                elif "NOITE" in turno or "NOIT" in turno:
+                    m_noite = "☑"
             
             blocos_memo = []
             for g_col, s_col, m_col in [(13,14,15), (17,18,19), (22,23,24), (26,27,28)]:
@@ -221,71 +293,29 @@ if arquivo_excel:
             
             qtd_processados += 1
             with st.expander(f"📋 Notificação {num_notif} — {nome_paciente} ({len(blocos_memo)} memo(s))", expanded=True):
-                st.write(f"📅 Data de Emissão: {data_extenso}")
-                st.write(f"📌 Data da Ocorrência: {data_ocorrencia} | 📌 Data da Notificação: {data_notificacao}")
-                st.write(f"📍 Local: {localizacao} | 🏥 Setor Notificante: {setor_notificante}")
-                st.write(f"⚠️ Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
-                st.write(f"🛏️ Leito: {leito} | 🔄 Turno: {turno}")
+                st.write(f"📅 Data de Emissão: **{data_extenso}**")
+                st.write(f"📌 Ocorrência: **{data_ocorrencia}** | Notificação: **{data_notificacao}**")
+                st.write(f"📍 Local: **{localizacao}** | 🏥 Setor Notificante: **{setor_notificante}**")
+                st.write(f"⚠️ Tipo: **{tipo_incidente}** | Classificação: **{classificacao_incidente}**")
+                st.write(f"🛏️ Paciente: **{nome_paciente}** | Leito: **{leito}**")
+                st.write(f"🔄 Turno: {m_manha} MANHÃ  {m_tarde} TARDE  {m_noite} NOITE")
+                if descricao_notificacao:
+                    st.write(f"📝 Descrição: {descricao_notificacao}")
                 if sugestao:
                     st.write(f"💡 Sugestão: {sugestao}")
                 
                 for b in blocos_memo:
                     email_destino = buscar_email_setor(b["setor"])
                     st.subheader(f"📄 MEMO: NSP Nº {b['num_memo']}/{ano_atual}")
-                    st.write(f"**Para:** {b['gestor']} da {b['setor']} | **Assunto:** Nº {num_notif}")
+                    st.write(f"**Para:** {b['gestor']} da {b['setor']}")
+                    st.write(f"**Assunto:** Nº {num_notif}")
                     st.info(f"📧 E-mail: {email_destino}")
                     
-                    # Texto do e-mail
+                    # ✅ TEXTO DO E-MAIL COMPLETO
                     corpo_email = f"""Boa Tarde, Prezados, ou bom dia de acordo com o horário.
 
 Segue em anexo o Memorando Nº {b['num_memo']}/{ano_atual} referente à notificação Nº {num_notif}, para ser analisado e respondido (via e-mail) em até 15 dias após a data presente.
 
 ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de Word ou PDF para arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens via e-mail sem arquivo como resposta.
 
-Atenciosamente,
-
-Ezequias S. Santos
-Agente Administrativo - NAQH & NSP
-nspsoc2@gmail.com
-"""
-                    with st.expander("✉️ Texto do E-mail"):
-                        st.text(corpo_email)
-                    
-                    # Todos os campos para substituir no Word
-                    dados_docx = {
-                        "{{numero_memorando}}": f"{b['num_memo']}/{ano_atual}",
-                        "{{assunto_numero}}": num_notif,
-                        "{{gestor}}": b["gestor"],
-                        "{{setor_destino}}": b["setor"],
-                        "{{data_ocorrencia}}": data_ocorrencia,
-                        "{{data_notificacao}}": data_notificacao,
-                        "{{m}}": m_manha,
-                        "{{t}}": m_tarde,
-                        "{{n}}": m_noite,
-                        "{{localizacao}}": localizacao,
-                        "{{tipo_incidente}}": tipo_incidente,
-                        "{{classificacao_incidente}}": classificacao_incidente,
-                        "{{descricao_notificacao}}": descricao_notificacao,
-                        "{{paciente}}": nome_paciente,
-                        "{{leito}}": leito,
-                        "{{setor_notificante}}": setor_notificante,
-                        "{{sugestao}}": sugestao,
-                        "{{data_extenso}}": data_extenso,
-                    }
-                    
-                    arquivo_docx = gerar_docx(dados_docx)
-                    if arquivo_docx:
-                        st.download_button(
-                            label="📄 Baixar Memorando (DOCX)",
-                            data=arquivo_docx,
-                            file_name=f"NSP_{b['num_memo']}_{ano_atual}.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
-                    st.divider()
-        
-        st.success(f"✅ Pronto! {qtd_processados} memorandos disponíveis.")
-    
-    except Exception as e:
-        st.error(f"❌ Erro: {str(e)}")
-else:
-    st.info("👆 Faça upload do arquivo .xlsx para começar")
+A
