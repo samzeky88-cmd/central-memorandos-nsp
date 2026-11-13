@@ -312,18 +312,15 @@ if arquivo_excel:
                         "{{sugestao}}": sugestao
                     }
                     
-                  arquivo_pronto = gerar_docx(dados_docx)
-                  arquivo_pronto = gerar_docx(dados_docx)
-                          arquivo_pronto = gerar_docx(dados_docx)
-linha 314:    arquivo_pronto = gerar_docx(dados_docx)
-linha 315:    if arquivo_pronto:
-linha 316:        st.download_button(
-linha 317:            label="📄 Baixar Memorando",
-linha 318:            data=arquivo_pronto,
-linha 319:            file_name=f"NSP_Nº {num_notif}_{ano_atual}.docx",
-linha 320:            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-linha 321:        )
-linha 322:except Exception as e:
-linha 323:    st.error(f"Erro ao processar planilha: {str(e)}")
+                    arquivo_pronto = gerar_docx(dados_docx)
+                    if arquivo_pronto:
+                        st.download_button(
+                            label="📄 Baixar Memorando",
+                            data=arquivo_pronto,
+                            file_name=f"NSP_Nº {num_notif}_{ano_atual}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+    except Exception as e:
+        st.error(f"Erro ao processar planilha: {str(e)}")
 
 
