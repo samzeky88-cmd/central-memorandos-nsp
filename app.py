@@ -1,6 +1,6 @@
 # =================================================================
 # 📄 GERADOR DE MEMORANDOS — HOSPITAL DR. JACKSON LAGO
-# Versão Completa: Gera DOCX • Converte PDF • Envia por E-mail
+# Versão Completa e Corrigida — SEM @st.fragment
 # =================================================================
 
 import os
@@ -105,7 +105,7 @@ df_setores = pd.DataFrame(LISTA_SETORES, columns=["SETOR", "E-MAIL"])
 df_setores = df_setores[df_setores["E-MAIL"].str.strip() != ""].reset_index(drop=True)
 
 # =================================================================
-# 🔐 CONFIGURAÇÕES DE E-MAIL — Usamos Secrets do Streamlit
+# 🔐 CONFIGURAÇÕES DE E-MAIL
 # =================================================================
 CONFIG_EMAIL = {
     "remetente": st.secrets.get("EMAIL_REMETENTE", os.getenv("EMAIL_REMETENTE", "")),
@@ -310,8 +310,4 @@ def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extens
             saida_docx = io.BytesIO()
             doc.save(saida_docx)
             saida_docx.seek(0)
-            docx_bytes = saida_docx.getvalue()
-
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.download
+            docx_bytes =
