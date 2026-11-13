@@ -223,8 +223,9 @@ with aba_ranking:
         st.subheader("📈 Resumo Geral")
         
         # ✅ TOTAL DE TREINAMENTOS — FIXO EM 44
-        st.write(f"**Total de participantes únicos:** {len(ranking)}")
-        st.write("**Total de treinamentos realizados:** 44")
+      st.write(f"**Total de participantes únicos:** {len(ranking)}")
+      st.write("**Total de treinamentos realizados:** 44")
+
         
         st.subheader("🏆 Destaques — Top 10")
         emojis = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
