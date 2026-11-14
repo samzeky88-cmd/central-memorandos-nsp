@@ -301,10 +301,10 @@ Agente Administrativo — NAQH / NSP
 Núcleo de Segurança do Paciente
 nspsoc2@gmail.com
                     """
-                    with st.expander("Texto do E-mail"):
+                                       with st.expander("Texto do E-mail"):
                         st.text(corpo_email.strip())
-                    
-                                      dados_docx = {
+
+                    dados_docx = {
                         "{{numero_memorando}}": num_memorando,
                         "{{notificacao_n}}": num_notificacao,
                         "{{gestor}}": gestor,
@@ -334,4 +334,3 @@ nspsoc2@gmail.com
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             key=f"download_pend_{num_notificacao}_{num_memorando}_{idx}"
                         )
-
