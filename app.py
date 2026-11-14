@@ -2,11 +2,91 @@
 # GERADOR DE MEMORANDOS — HOSPITAL DA CIDADE DR. JACKSON LAGO
 # =================================================================
 
+# PASSO 1 — IMPORTAR PRIMEIRO
 import pandas as pd
 import streamlit as st
 import io
 from datetime import datetime
 from docx import Document
+
+# PASSO 2 — CONFIGURAÇÃO DA PÁGINA
+st.set_page_config(page_title="Emissor de Memorandos", page_icon="📄", layout="wide")
+
+# PASSO 3 — CSS DE MELHORIAS DE NAVEGAÇÃO
+st.markdown("""
+<style>
+/* ===== BARRA DE ROLAGEM MAIS VISÍVEL ===== */
+::-webkit-scrollbar {
+    width: 14px !important;
+    height: 14px !important;
+}
+::-webkit-scrollbar-track {
+    background: #2c3e50 !important;
+    border-radius: 7px !important;
+}
+::-webkit-scrollbar-thumb {
+    background: #3498db !important;
+    border-radius: 7px !important;
+    border: 2px solid #2c3e50 !important;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #2980b9 !important;
+}
+/* ===== DESTAQUE NOS EXPANDERS ===== */
+div[data-testid="stExpander"] {
+    border: 1px solid #4a5568 !important;
+    border-radius: 8px !important;
+    margin-bottom: 12px !important;
+    background: #1e293b !important;
+}
+div[data-testid="stExpander"]:hover {
+    border-color: #3498db !important;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.15) !important;
+}
+/* ===== TARJA ENVIADO ===== */
+.tarja-enviado {
+    background: linear-gradient(90deg, #00b894, #00a884) !important;
+    color: white !important;
+    padding: 10px 16px !important;
+    border-radius: 6px !important;
+    font-weight: bold !important;
+    text-align: center !important;
+    margin-bottom: 16px !important;
+    font-size: 16px !important;
+}
+/* ===== BOTÕES ===== */
+button[kind="primary"] {
+    background: #3498db !important;
+    border: none !important;
+    font-weight: 500 !important;
+}
+button[kind="primary"]:hover {
+    background: #2980b9 !important;
+}
+/* ===== LEITURA GERAL ===== */
+.block-container {
+    max-width: 100% !important;
+    padding-top: 1.5rem !important;
+    padding-bottom: 3rem !important;
+}
+hr {
+    border: none !important;
+    border-top: 1px solid #4a5568 !important;
+    margin: 1.5rem 0 !important;
+}
+/* ===== SEÇÕES ===== */
+.secao-enviados h2 {
+    color: #00b894 !important;
+    border-bottom: 2px solid #00b894;
+    padding-bottom: 8px;
+}
+.secao-pendentes h2 {
+    color: #f39c12 !important;
+    border-bottom: 2px solid #f39c12;
+    padding-bottom: 8px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =================================================================
 # FUNÇÕES AUXILIARES
@@ -152,17 +232,18 @@ def gerar_docx(dados):
         return None
 
 # =================================================================
-# INTERFACE PRINCIPAL
+# DADOS FIXOS
 # =================================================================
-
-st.set_page_config(page_title="Emissor de Memorandos", page_icon="📄", layout="wide")
-st.title("📄 Emissor de Memorandos — Hospital da Cidade Dr. Jackson Lago")
-st.divider()
-
-# Dados fixos conforme solicitado
 TOTAL_GERAL = 964
 JA_ENVIADOS_INICIAL = 433
 PENDENTES_INICIAL = 531
+
+# =================================================================
+# INTERFACE PRINCIPAL
+# =================================================================
+
+st.title("📄 Emissor de Memorandos — Hospital da Cidade Dr. Jackson Lago")
+st.divider()
 
 arquivo_excel = st.file_uploader("Carregue a Planilha (.xlsx)", type=["xlsx"])
 
@@ -173,14 +254,45 @@ if arquivo_excel:
         if 'Status' not in df.columns:
             df.insert(1, 'Status', '')
         
-        # Conta quantos foram marcados como enviados na sessão atual
-        marcados_agora = df['Status'].apply(lambda x: str(x).strip().upper() == "ENVIADO").sum()
+        # Separar os itens
+        itens_enviados = []
+        itens_pendentes = []
+        
+        for idx, linha in df.iterrows():
+            num_notificacao = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
+            if not num_notificacao or num_notificacao.upper() == "Nº" or "NOTIF" in str(num_notificacao).upper():
+                continue
+            num_memorando = tratar_texto(linha.iloc[15]) if len(linha) > 15 else ""
+            if not num_memorando:
+                continue
+            nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else ""
+            status_atual = tratar_texto(linha.get('Status', '')).upper()
+            
+            item = {
+                'idx': idx,
+                'linha': linha,
+                'num_notificacao': num_notificacao,
+                'num_memorando': num_memorando,
+                'nome_paciente': nome_paciente,
+                'enviado': (status_atual == "ENVIADO")
+            }
+            
+            if item['enviado']:
+                itens_enviados.append(item)
+            else:
+                itens_pendentes.append(item)
+        
+        # Calcular totais
+        marcados_agora = len(itens_enviados) - JA_ENVIADOS_INICIAL
+        if marcados_agora < 0:
+            marcados_agora = 0
         total_enviados = JA_ENVIADOS_INICIAL + marcados_agora
         total_pendentes = PENDENTES_INICIAL - marcados_agora
         if total_pendentes < 0:
             total_pendentes = 0
         
-        st.subheader("RESUMO GERAL")
+        # RESUMO
+        st.subheader("📊 RESUMO GERAL")
         col1, col2, col3 = st.columns(3)
         col1.metric("Total de Memorandos", TOTAL_GERAL)
         col2.metric("✅ Já Enviados", total_enviados)
@@ -192,15 +304,13 @@ if arquivo_excel:
         data_extenso = data_por_extenso(data_atual)
         output_planilha = io.BytesIO()
         
-        for idx, linha in df.iterrows():
-            num_notificacao = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
-            if not num_notificacao or num_notificacao.upper() == "Nº" or "NOTIF" in str(num_notificacao).upper():
-                continue
-            num_memorando = tratar_texto(linha.iloc[15]) if len(linha) > 15 else ""
-            if not num_memorando:
-                continue
-            nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else ""
-            status_atual = tratar_texto(linha.get('Status', '')).upper()
+        # FUNÇÃO PARA RENDERIZAR UM ITEM
+        def exibir_item(item, eh_pendente=True):
+            idx = item['idx']
+            linha = item['linha']
+            num_notificacao = item['num_notificacao']
+            num_memorando = item['num_memorando']
+            nome_paciente = item['nome_paciente']
             
             data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
             data_notificacao = formatar_data_sem_hora(linha.iloc[3]) if len(linha) > 3 else ""
@@ -230,18 +340,15 @@ if arquivo_excel:
                 saudacao = "Boa noite,"
             
             titulo_memo = f"📋 Notificação Nº {num_notificacao} — {nome_paciente}"
-            eh_enviado = (status_atual == "ENVIADO")
             
-            with st.expander(titulo_memo, expanded=(not eh_enviado)):
-                # Tarja visual para os já enviados
-                if eh_enviado:
+            with st.expander(titulo_memo, expanded=eh_pendente):
+                if not eh_pendente:
                     st.markdown("""
-<div style="background-color:#00b894; color:white; padding:8px 16px; border-radius:4px; font-weight:bold; text-align:center; margin-bottom:16px;">
+<div style="background: linear-gradient(90deg, #00b894, #00a884); color:white; padding:10px 16px; border-radius:6px; font-weight:bold; text-align:center; margin-bottom:16px; font-size:16px;">
 ✅ JÁ FOI ENVIADO
 </div>
                     """, unsafe_allow_html=True)
                 else:
-                    # Caixinha aparece SOMENTE nos pendentes
                     marcado = st.checkbox(
                         "✅ Marcar como enviado",
                         value=False,
@@ -252,14 +359,10 @@ if arquivo_excel:
                         st.rerun()
                 
                 st.divider()
-                
-                # Apenas Setor Notificado e E-mail
                 st.write(f"📤 **Setor Notificado:** {setor_notificado if setor_notificado else 'Não informado'}")
                 st.write(f"📧 **E-mail para envio:** {email_destino}")
-                
                 st.divider()
                 
-                # Corpo do E-mail simplificado
                 corpo_email = f"""{saudacao} Prezado(a),
 
 Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
@@ -281,55 +384,4 @@ nspsoc2@gmail.com
                 dados_docx = {
                     "{{numero_memorando}}": num_memorando,
                     "{{notificacao_n}}": num_notificacao,
-                    "{{gestor}}": gestor,
-                    "{{setor_notificado}}": setor_notificado,
-                    "{{setor_notificante}}": setor_notificante,
-                    "{{data_envio}}": data_extenso,
-                    "{{data_ocorrencia}}": data_ocorrencia,
-                    "{{data_notificacao}}": data_notificacao,
-                    "{{m}}": m,
-                    "{{t}}": t,
-                    "{{n}}": n,
-                    "{{localizacao}}": localizacao,
-                    "{{tipo_incidente}}": tipo_incidente,
-                    "{{classificacao_incidente}}": classificacao_incidente,
-                    "{{descricao_notificacao}}": descricao_notificacao,
-                    "{{nome_paciente}}": nome_paciente,
-                    "{{leito}}": leito,
-                    "{{sugestao}}": sugestao,
-                }
-                
-                arquivo_pronto = gerar_docx(dados_docx)
-                if arquivo_pronto:
-                    st.download_button(
-                        label="📄 Baixar Memorando",
-                        data=arquivo_pronto,
-                        file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"download_{num_notificacao}_{num_memorando}_{idx}"
-                    )
-        
-        st.divider()
-        if st.button("💾 Salvar planilha com status atualizado"):
-            output_planilha.seek(0)
-            df.to_excel(output_planilha, index=False, engine="openpyxl")
-            st.download_button(
-                label="📥 Baixar planilha atualizada",
-                data=output_planilha.getvalue(),
-                file_name="memorandos_atualizados.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-            st.success("Planilha pronta para download!")
-    
-    except Exception as e:
-        st.error(f"Erro ao processar arquivo: {str(e)}")
-else:
-    st.info("👆 Faça upload da sua planilha Excel (.xlsx) para começar")
-    
-    # Mostra os dados mesmo sem arquivo carregado
-    st.subheader("RESUMO GERAL")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total de Memorandos", TOTAL_GERAL)
-    col2.metric("✅ Já Enviados", JA_ENVIADOS_INICIAL)
-    col3.metric("⏳ Pendentes", PENDENTES_INICIAL)
-    st.info(f"{TOTAL_GERAL} - {JA_ENVIADOS_INICIAL} = {PENDENTES_INICIAL} memorandos pendentes")
+                    "{{gestor}}":
