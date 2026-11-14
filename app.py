@@ -1,7 +1,20 @@
 # =================================================================
-# MELHORIAS DE NAVEGAÇÃO E BARRA DE ROLAGEM
+# PASSO 1 — PRIMEIRO IMPORTAR TUDO
 # =================================================================
+import pandas as pd
+import streamlit as st
+import io
+from datetime import datetime
+from docx import Document
 
+# =================================================================
+# PASSO 2 — CONFIGURAÇÃO DA PÁGINA
+# =================================================================
+st.set_page_config(page_title="Emissor de Memorandos", page_icon="📄", layout="wide")
+
+# =================================================================
+# PASSO 3 — AGORA SIM O CSS DEPOIS DO st.set_page_config
+# =================================================================
 st.markdown("""
 <style>
 /* ===== BARRA DE ROLAGEM MAIS VISÍVEL ===== */
@@ -38,18 +51,6 @@ div[data-testid="stExpander"]:hover {
     box-shadow: 0 2px 8px rgba(52, 152, 219, 0.15) !important;
 }
 
-/* ===== TARJA ENVIADO ===== */
-.tarja-enviado {
-    background: linear-gradient(90deg, #00b894, #00a884) !important;
-    color: white !important;
-    padding: 10px 16px !important;
-    border-radius: 6px !important;
-    font-weight: bold !important;
-    text-align: center !important;
-    margin-bottom: 16px !important;
-    font-size: 16px !important;
-}
-
 /* ===== BOTÕES MAIS DESTAQUES ===== */
 button[kind="primary"] {
     background: #3498db !important;
@@ -76,3 +77,8 @@ hr {
 }
 </style>
 """, unsafe_allow_html=True)
+
+# =================================================================
+# RESTO DO SEU CÓDIGO AQUI
+# =================================================================
+# [cole aqui o restante do código — funções, interface, etc.]
