@@ -1,387 +1,228 @@
-# =================================================================
-# GERADOR DE MEMORANDOS — HOSPITAL DA CIDADE DR. JACKSON LAGO
-# =================================================================
-
-# PASSO 1 — IMPORTAR PRIMEIRO
+import os
 import pandas as pd
 import streamlit as st
 import io
-from datetime import datetime
+import urllib.parse
+from datetime import datetime, timedelta, timezone
 from docx import Document
 
-# PASSO 2 — CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(page_title="Emissor de Memorandos", page_icon="📄", layout="wide")
+st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 
-# PASSO 3 — CSS DE MELHORIAS DE NAVEGAÇÃO
-st.markdown("""
-<style>
-/* ===== BARRA DE ROLAGEM MAIS VISÍVEL ===== */
-::-webkit-scrollbar {
-    width: 14px !important;
-    height: 14px !important;
-}
-::-webkit-scrollbar-track {
-    background: #2c3e50 !important;
-    border-radius: 7px !important;
-}
-::-webkit-scrollbar-thumb {
-    background: #3498db !important;
-    border-radius: 7px !important;
-    border: 2px solid #2c3e50 !important;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: #2980b9 !important;
-}
-/* ===== DESTAQUE NOS EXPANDERS ===== */
-div[data-testid="stExpander"] {
-    border: 1px solid #4a5568 !important;
-    border-radius: 8px !important;
-    margin-bottom: 12px !important;
-    background: #1e293b !important;
-}
-div[data-testid="stExpander"]:hover {
-    border-color: #3498db !important;
-    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.15) !important;
-}
-/* ===== TARJA ENVIADO ===== */
-.tarja-enviado {
-    background: linear-gradient(90deg, #00b894, #00a884) !important;
-    color: white !important;
-    padding: 10px 16px !important;
-    border-radius: 6px !important;
-    font-weight: bold !important;
-    text-align: center !important;
-    margin-bottom: 16px !important;
-    font-size: 16px !important;
-}
-/* ===== BOTÕES ===== */
-button[kind="primary"] {
-    background: #3498db !important;
-    border: none !important;
-    font-weight: 500 !important;
-}
-button[kind="primary"]:hover {
-    background: #2980b9 !important;
-}
-/* ===== LEITURA GERAL ===== */
-.block-container {
-    max-width: 100% !important;
-    padding-top: 1.5rem !important;
-    padding-bottom: 3rem !important;
-}
-hr {
-    border: none !important;
-    border-top: 1px solid #4a5568 !important;
-    margin: 1.5rem 0 !important;
-}
-/* ===== SEÇÕES ===== */
-.secao-enviados h2 {
-    color: #00b894 !important;
-    border-bottom: 2px solid #00b894;
-    padding-bottom: 8px;
-}
-.secao-pendentes h2 {
-    color: #f39c12 !important;
-    border-bottom: 2px solid #f39c12;
-    padding-bottom: 8px;
-}
-</style>
-""", unsafe_allow_html=True)
+st.title("📝 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 
-# =================================================================
-# FUNÇÕES AUXILIARES
-# =================================================================
+st.markdown("### 📅 Configuração da Data de Envio")
+data_selecionada = st.date_input("Selecione a data que sairá no cabeçalho do Memorando:", datetime.now())
 
-def tratar_texto(valor):
-    if pd.isna(valor):
-        return ""
-    return str(valor).strip()
+arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
+caminho_modelo = "modelo_memorando.docx"
 
-def limpar_numero(valor):
-    if pd.isna(valor):
+
+def substituir_texto_protegendo_logos(doc, dicionario_tags):
+    """Substitui o texto alterando apenas os 'runs' para proteger imagens e cabeçalhos."""
+    for paragrafo in doc.paragraphs:
+        for tag, valor in dicionario_tags.items():
+            if tag in paragrafo.text:
+                for run in paragrafo.runs:
+                    if tag in run.text:
+                        run.text = run.text.replace(tag, valor)
+
+    for tabela in doc.tables:
+        for linha in tabela.rows:
+            for celula in linha.cells:
+                for paragrafo in celula.paragraphs:
+                    for tag, valor in dicionario_tags.items():
+                        if tag in paragrafo.text:
+                            for run in paragrafo.runs:
+                                if tag in run.text:
+                                    run.text = run.text.replace(tag, valor)
+
+
+def formatar_data_br(valor):
+    """Garante que as datas sejam exibidas no formato brasileiro DD/MM/AAAA"""
+    try:
+        if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
+            return ""
+        return pd.to_datetime(valor).strftime("%d/%m/%Y")
+    except:
+        return str(valor).strip()
+
+
+def limpar_numero_float(valor):
+    """Remove o .0 de números inteiros vindos do Excel (ex: 886.0 vira 886)"""
+    if pd.isna(valor) or str(valor).strip().lower() == "nan":
         return ""
     try:
         if isinstance(valor, float) and valor.is_integer():
             return str(int(valor))
-        return str(valor).strip()
+        v_str = str(valor).strip()
+        if v_str.endswith(".0"):
+            return v_str[:-2]
+        return v_str
     except:
         return str(valor)
 
-def formatar_data_sem_hora(valor):
-    if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().upper() == "NAN":
+
+def tratar_str_limpa(valor):
+    """Evita que campos vazios ou nulos exibam a palavra 'nan'"""
+    if pd.isna(valor) or str(valor).strip().lower() == "nan" or str(valor).strip().lower() == "none":
         return ""
-    try:
-        dt = pd.to_datetime(valor)
-        return dt.strftime("%d/%m/%Y")
-    except:
-        return str(valor).strip().split(" ")[0]
+    return str(valor).strip()
 
-def data_por_extenso(dt):
-    meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-             "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-    return f"{dt.day} de {meses[dt.month-1]} de {dt.year}"
 
-# =================================================================
-# E-MAILS
-# =================================================================
-def buscar_email_setor(setor_notificado):
-    if not setor_notificado or str(setor_notificado).strip() == "":
-        return "nspsoc2@gmail.com"
-    
-    nome = str(setor_notificado).strip().upper()
-    
-    emails = {
-        "ALA D": "ortopediaalad.hcid@gmail.com",
-        "AGÊNCIA TRANSFUSIONAL": "agenciatransfusional.hcid@gmail.com",
-        "ALA A": "alaaclinicamedica@gmail.com",
-        "ALA F (UTI B)": "utihcid@gmail.com",
-        "ALA I": "ortopediaalai.hcid@gmail.com",
-        "ALA F (UTI C)": "utihcid@gmail.com",
-        "ALA G": "aladgh.hcid@gmail.com",
-        "SALA VERMELHA": "salavermelhasdm@gmail.com",
-        "ALA J": "ortopediaalaj.hcid@gmail.com",
-        "FARMÁCIA": "farmacia.hcid@gmail.com",
-        "CENTRAL INTERNA DE TRANSPORTE": "centraltransporte.hcid@gmail.com",
-        "HOTELARIA": "hotelaria.hcid@gmail.com",
-        "ALA F (UTI A)": "utihcid@gmail.com",
-        "ECP - EQUIPE DE CUIDADOS COM A PELE": "carlosemilioecp@gmail.com",
-        "AUXILIAR DE TRANSPORTE": "centraltransporte.hcid@gmail.com",
-        "FISIOTERAPIA": "fisioreabsoc2@gmail.com",
-        "TERAPIA OCUPACIONAL": "terapiaocupacional.hcid@gmail.com",
-        "SERVIÇO SOCIAL": "servicosocialhcid@gmail.com",
-        "NUTRIÇÃO": "nutricaohospitaldacidade@gmail.com",
-        "GESTOR DE ENFERMAGEM": "enfermagem.hcid@gmail.com",
-        "GESTOR DE GERÊNCIA DE ENFERMAGEM": "gerenciaenfermagem.hcid@gmail.com",
-        "NIR (NÚCLEO INTERNO DE REGULAÇÃO)": "coordenanirs2@gmail.com",
-        "CENTRO CIRÚRGICO": "centrocirurgicosoc2@gmail.com",
-        "ENDOSCOPIA": "endoscopiasoc2@gmail.com",
-        "DIREÇÃO ADMINISTRATIVA": "direcao.hospitaldacidade@gmail.com",
+def obter_data_por_extenso(dt):
+    """Gera a data selecionada por extenso em português brasileiro"""
+    meses = {
+        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
-    
-    for chave, email in emails.items():
-        if chave == nome or chave in nome or nome in chave:
-            return email
-    return "nspsoc2@gmail.com"
+    return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
-# =================================================================
-# GESTORES
-# =================================================================
-def buscar_gestor(setor_notificado):
-    if not setor_notificado or str(setor_notificado).strip() == "":
-        return ""
-    
-    nome = str(setor_notificado).strip().upper()
-    
-    gestores = {
-        "ALA D": "GESTOR DE ENFERMAGEM",
-        "AGÊNCIA TRANSFUSIONAL": "GESTOR DA AGÊNCIA TRANSFUSIONAL",
-        "ALA A": "GESTOR DE ENFERMAGEM",
-        "ALA F (UTI B)": "GESTOR DE ENFERMAGEM",
-        "ALA I": "GESTOR DE ENFERMAGEM",
-        "ALA F (UTI C)": "GESTOR DE ENFERMAGEM",
-        "ALA G": "GESTOR DE ENFERMAGEM",
-        "SALA VERMELHA": "GESTOR DE ENFERMAGEM",
-        "ALA J": "GESTOR DE ENFERMAGEM",
-        "FARMÁCIA": "GESTOR DE FARMÁCIA",
-        "CENTRAL INTERNA DE TRANSPORTE": "GESTOR DA CENTRAL INTERNA DE TRANSPORTE",
-        "HOTELARIA": "GESTOR DE HOTELARIA",
-        "ALA F (UTI A)": "GESTOR DE ENFERMAGEM",
-        "ECP - EQUIPE DE CUIDADOS COM A PELE": "GESTOR DA ECP",
-        "AUXILIAR DE TRANSPORTE": "GESTOR DA CENTRAL INTERNA DE TRANSPORTE",
-        "FISIOTERAPIA": "GESTOR DE FISIOTERAPIA",
-        "TERAPIA OCUPACIONAL": "GESTOR DE TERAPIA OCUPACIONAL",
-        "SERVIÇO SOCIAL": "GESTOR DE SERVIÇO SOCIAL",
-        "NUTRIÇÃO": "GESTOR DE NUTRIÇÃO",
-        "GESTOR DE ENFERMAGEM": "GESTOR DE ENFERMAGEM",
-        "GESTOR DE GERÊNCIA DE ENFERMAGEM": "GESTOR DE GERÊNCIA DE ENFERMAGEM",
-        "NIR (NÚCLEO INTERNO DE REGULAÇÃO)": "GESTOR DO NIR",
-        "CENTRO CIRÚRGICO": "GESTOR DE ENFERMAGEM",
-        "ENDOSCOPIA": "GESTOR DE ENDOSCOPIA",
-        "DIREÇÃO ADMINISTRATIVA": "GESTOR DE DIREÇÃO",
+
+@st.fragment
+def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
+    num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
+    if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
+        return
+
+    status_envio = str(linha.iloc[1]).strip().upper() if num_colunas > 1 else ""
+
+    dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else ""
+    dt_notif = formatar_data_br(linha.iloc[3]) if num_colunas > 3 else ""
+    turno_planilha = str(linha.iloc[4]).strip().upper() if num_colunas > 4 else ""
+    onde_ocorreu = tratar_str_limpa(linha.iloc[5]) if num_colunas > 5 else "Ala B"
+    tipo_incidente = tratar_str_limpa(linha.iloc[6]) if num_colunas > 6 else ""
+    classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
+    descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
+
+    nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
+    if nome_do_paciente.upper() == "PACIENTE":
+        return
+
+    leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
+    setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
+    sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else ""
+    gestor_destinatario = tratar_str_limpa(linha.iloc[13]) if num_colunas > 13 else "GESTOR DE ENFERMAGEM"
+    setor_notificado_final = tratar_str_limpa(linha.iloc[14]) if num_colunas > 14 else onde_ocorreu
+
+    num_memo_cru = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else ""
+    if num_memo_cru == "" or num_memo_cru.upper() == "N° MEMO 01":
+        num_memo_cru = "S-N"
+
+    email_destino = tratar_str_limpa(linha.iloc[21]) if num_colunas > 21 else ""
+    if email_destino.upper() == "EMAIL_SETOR":
+        return
+
+    num_memo_limpo = num_memo_cru.replace("Nº", "").replace("No", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
+    nome_base_arquivo = f"MEMORANDO N° {num_memo_limpo}_NOTIFICAÇÃO_N° {num_notif}_I_NSP"
+
+    marca_manha = "X" if "MANH" in turno_planilha else ""
+    marca_tarde = "X" if "TARD" in turno_planilha else ""
+    marca_noite = "X" if "NOIT" in turno_planilha else ""
+
+    if setor_notificante_bruto == "":
+        setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE"
+
+    dados_memorando = {
+        "{{numero_memorando}}": num_memo_cru,
+        "{{gestor}}": gestor_destinatario,
+        "{{setor}}": setor_notificado_final,
+        "{{notificacao_n}}": num_notif,
+        "{{data_notificacao}}": dt_notif,
+        "{{data_ocorrencia}}": dt_ocorr,
+        "{{localizacao}}": onde_ocorreu,
+        "{{tipo_incidente}}": tipo_incidente,
+        "{{classificacao_incidente}}": classificacao_incidente,
+        "{{descricao_notificacao}}": descricao_notificacao,
+        "{{nome_paciente}}": nome_do_paciente,
+        "{{leito}}": leito_paciente,
+        "{{setor_notificante}}": setor_notificante_bruto,
+        "{{sugestao}}": sugestao_nsp,
+        "{{m}}": marca_manha,
+        "{{t}}": marca_tarde,
+        "{{n}}": marca_noite,
+        "{{data_envio}}": data_extenso_envio
     }
-    
-    for chave, gestor in gestores.items():
-        if chave == nome or chave in nome or nome in chave:
-            return gestor
-    return ""
 
-def substituir_texto_no_docx(doc, dados):
-    for p in doc.paragraphs:
-        for chave, valor in dados.items():
-            if chave in p.text:
-                p.text = p.text.replace(chave, str(valor))
-    for tabela in doc.tables:
-        for linha in tabela.rows:
-            for celula in linha.cells:
-                substituir_texto_no_docx(celula, dados)
+    fuso_brasilia = timezone(timedelta(hours=-3))
+    hora_atual = datetime.now(fuso_brasilia).hour
+    saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
 
-def gerar_docx(dados):
-    try:
-        with open("modelo_memorando.docx", "rb") as f:
-            doc = Document(f)
-        substituir_texto_no_docx(doc, dados)
-        saida = io.BytesIO()
-        doc.save(saida)
-        saida.seek(0)
-        return saida
-    except FileNotFoundError:
-        st.error("ERRO: Coloque o arquivo modelo_memorando.docx na mesma pasta do app.py")
-        return None
-    except Exception as e:
-        st.error(f"Erro ao gerar arquivo: {str(e)}")
-        return None
+    # [CORRIGIDO]: Ajustado o prefixo do memorando e atualizado o cargo administrativo da assinatura
+    corpo_email = (
+        f"{saudacao},\n\n"
+        f"Segue em Anexo o Memorando {num_memo_cru} para ser analisado e respondido "
+        f"(via e-mail) em até 15 dias após a data presente.\n\n"
+        f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para "
+        f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens "
+        f"via e-mail sem arquivo como resposta.\n\n"
+        f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP:\n"
+        f"• Memorando: {num_memo_cru}\n"
+        f"• Notificação: N°  {num_notif}\n\n"
+        f"Atenciosamente,\n"
+        f"Ezequias S. Santos\n"
+        f"Agente Administrativo - NAQH & NSP"
+    )
 
-# =================================================================
-# DADOS FIXOS
-# =================================================================
-TOTAL_GERAL = 964
-JA_ENVIADOS_INICIAL = 433
-PENDENTES_INICIAL = 531
+    col_nome, col_word, col_pdf, col_copiar = st.columns([1.5, 0.8, 0.8, 1.8])
 
-# =================================================================
-# INTERFACE PRINCIPAL
-# =================================================================
+    with col_nome:
+        if status_envio == "ENVIADO":
+            st.markdown(f"~~{nome_do_paciente}~~ 🟢 *(Já Enviado)*")
+        else:
+            st.markdown(f"**🔹 {nome_do_paciente}**")
 
-st.title("📄 Emissor de Memorandos — Hospital da Cidade Dr. Jackson Lago")
-st.divider()
+        if email_destino:
+            st.caption(f"📧 Destinatário: {email_destino}")
 
-arquivo_excel = st.file_uploader("Carregue a Planilha (.xlsx)", type=["xlsx"])
+    with col_word:
+        doc_word = Document(caminho_modelo)
+        substituir_texto_protegendo_logos(doc_word, dados_memorando)
+        word_io = io.BytesIO()
+        doc_word.save(word_io)
+        word_io.seek(0)
+        st.download_button(
+            label="📄 WORD",
+            data=word_io.getvalue(),
+            file_name=f"{nome_base_arquivo}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key=f"w_{index}"
+        )
+
+    with col_pdf:
+        st.download_button(
+            label="📕 PDF",
+            data=word_io.getvalue(),
+            file_name=f"{nome_base_arquivo}.pdf",
+            mime="application/pdf",
+            key=f"p_{index}"
+        )
+
+    with col_copiar:
+        st.code(corpo_email, language="text")
+
+    st.markdown("---")
+
 
 if arquivo_excel:
-    try:
-        df = pd.read_excel(arquivo_excel, engine="openpyxl")
-        
-        if 'Status' not in df.columns:
-            df.insert(1, 'Status', '')
-        
-        # Separar os itens
-        itens_enviados = []
-        itens_pendentes = []
-        
-        for idx, linha in df.iterrows():
-            num_notificacao = limpar_numero(linha.iloc[0]) if len(linha) > 0 else ""
-            if not num_notificacao or num_notificacao.upper() == "Nº" or "NOTIF" in str(num_notificacao).upper():
-                continue
-            num_memorando = tratar_texto(linha.iloc[15]) if len(linha) > 15 else ""
-            if not num_memorando:
-                continue
-            nome_paciente = tratar_texto(linha.iloc[9]) if len(linha) > 9 else ""
-            status_atual = tratar_texto(linha.get('Status', '')).upper()
-            
-            item = {
-                'idx': idx,
-                'linha': linha,
-                'num_notificacao': num_notificacao,
-                'num_memorando': num_memorando,
-                'nome_paciente': nome_paciente,
-                'enviado': (status_atual == "ENVIADO")
-            }
-            
-            if item['enviado']:
-                itens_enviados.append(item)
-            else:
-                itens_pendentes.append(item)
-        
-        # Calcular totais
-        marcados_agora = len(itens_enviados) - JA_ENVIADOS_INICIAL
-        if marcados_agora < 0:
-            marcados_agora = 0
-        total_enviados = JA_ENVIADOS_INICIAL + marcados_agora
-        total_pendentes = PENDENTES_INICIAL - marcados_agora
-        if total_pendentes < 0:
-            total_pendentes = 0
-        
-        # RESUMO
-        st.subheader("📊 RESUMO GERAL")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total de Memorandos", TOTAL_GERAL)
-        col2.metric("✅ Já Enviados", total_enviados)
-        col3.metric("⏳ Pendentes", total_pendentes)
-        st.info(f"{TOTAL_GERAL} - {total_enviados} = {total_pendentes} memorandos pendentes")
-        st.divider()
-        
-        data_atual = datetime.now()
-        data_extenso = data_por_extenso(data_atual)
-        output_planilha = io.BytesIO()
-        
-        # FUNÇÃO PARA RENDERIZAR UM ITEM
-        def exibir_item(item, eh_pendente=True):
-            idx = item['idx']
-            linha = item['linha']
-            num_notificacao = item['num_notificacao']
-            num_memorando = item['num_memorando']
-            nome_paciente = item['nome_paciente']
-            
-            data_ocorrencia = formatar_data_sem_hora(linha.iloc[2]) if len(linha) > 2 else ""
-            data_notificacao = formatar_data_sem_hora(linha.iloc[3]) if len(linha) > 3 else ""
-            turno = tratar_texto(linha.iloc[4]) if len(linha) > 4 else ""
-            localizacao = tratar_texto(linha.iloc[5]) if len(linha) > 5 else ""
-            tipo_incidente = tratar_texto(linha.iloc[6]) if len(linha) > 6 else ""
-            classificacao_incidente = tratar_texto(linha.iloc[7]) if len(linha) > 7 else ""
-            descricao_notificacao = tratar_texto(linha.iloc[8]) if len(linha) > 8 else ""
-            leito = tratar_texto(linha.iloc[10]) if len(linha) > 10 else ""
-            setor_notificante = tratar_texto(linha.iloc[11]) if len(linha) > 11 else ""
-            sugestao = tratar_texto(linha.iloc[12]) if len(linha) > 12 else ""
-            setor_notificado = tratar_texto(linha.iloc[18]) if len(linha) > 18 else ""
-            
-            m = "☑" if "MANHÃ" in turno.upper() else "☐"
-            t = "☑" if "TARDE" in turno.upper() else "☐"
-            n = "☑" if "NOITE" in turno.upper() else "☐"
-            
-            gestor = buscar_gestor(setor_notificado)
-            email_destino = buscar_email_setor(setor_notificado)
-            
-            hora_atual = datetime.now().hour
-            if 6 <= hora_atual < 12:
-                saudacao = "Bom dia,"
-            elif 12 <= hora_atual < 18:
-                saudacao = "Boa tarde,"
-            else:
-                saudacao = "Boa noite,"
-            
-            titulo_memo = f"📋 Notificação Nº {num_notificacao} — {nome_paciente}"
-            
-            with st.expander(titulo_memo, expanded=eh_pendente):
-                if not eh_pendente:
-                    st.markdown("""
-<div style="background: linear-gradient(90deg, #00b894, #00a884); color:white; padding:10px 16px; border-radius:6px; font-weight:bold; text-align:center; margin-bottom:16px; font-size:16px;">
-✅ JÁ FOI ENVIADO
-</div>
-                    """, unsafe_allow_html=True)
-                else:
-                    marcado = st.checkbox(
-                        "✅ Marcar como enviado",
-                        value=False,
-                        key=f"check_{num_notificacao}_{num_memorando}_{idx}"
-                    )
-                    if marcado:
-                        df.at[idx, 'Status'] = 'ENVIADO'
-                        st.rerun()
-                
-                st.divider()
-                st.write(f"📤 **Setor Notificado:** {setor_notificado if setor_notificado else 'Não informado'}")
-                st.write(f"📧 **E-mail para envio:** {email_destino}")
-                st.divider()
-                
-                corpo_email = f"""{saudacao} Prezado(a),
+    df = pd.read_excel(arquivo_excel, header=None)
 
-Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
-para ser analisada e respondida (via e-mail) em até 15 dias após a data presente.
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0]) == "1"):
+        df = df.iloc[1:]
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1]) == "1"):
+        df = df.iloc[2:]
 
-ATENÇÃO: A resposta via e-mail deve conter um arquivo em formato Word ou PDF para arquivamento
-das respostas conforme rotina institucional. Não serão aceitas mensagens sem arquivo anexo.
+    data_extenso_envio = obter_data_por_extenso(data_selecionada)
+    num_colunas = len(df.columns)
 
-Atenciosamente,
+    df = df.dropna(subset=[df.columns[0]])
 
-Ezequias S. Santos
-Agente Administrativo — NAQH / NSP
-Núcleo de Segurança do Paciente
-nspsoc2@gmail.com
-"""
-                with st.expander("📋 Copiar texto do e-mail"):
-                    st.code(corpo_email, language=None)
-                
-                dados_docx = {
-                    "{{numero_memorando}}": num_memorando,
-                    "{{notificacao_n}}": num_notificacao,
-                    "{{gestor}}":
+    if num_colunas > 9:
+        df = df.dropna(subset=[df.columns[9]])
+        df = df[df[df.columns[9]].astype(str).str.strip() != ""]
+
+    st.success(f"✅ Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
+
+    for index, line in df.iterrows():
+        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio)
+else:
+    st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
