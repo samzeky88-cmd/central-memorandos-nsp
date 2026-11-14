@@ -270,15 +270,27 @@ def processar_linha(index, linha, num_colunas, data_extenso_envio):
                         if d['sugestao_nsp']:
                             st.success(f"💡 Sugestão NSP: {d['sugestao_nsp']}")
                     st.markdown("---")
-                    for memo in d['lista_memos']:
+                                        for memo in d['lista_memos']:
                         renderizar_memorando(
-                            d['index'], memo, d['linha'], d['num_notif'], data_extenso_envio,
+                            d['index'], memo, d['linha'],
+                            d['num_notif'], data_extenso_envio,
                             d['dt_ocorr'], d['dt_notif'], d['onde_ocorreu'],
                             d['tipo_incidente'], d['classificacao_incidente'],
                             d['descricao_notificacao'], d['nome_do_paciente'],
                             d['leito_paciente'], d['setor_notificante_bruto'],
                             d['sugestao_nsp'], d['turno_planilha'], "ENVIADO"
                         )
+
+                        renderizar_memorando(
+                            d['index'], memo, d['linha'],
+                            d['num_notif'], data_extenso_envio,
+                            d['dt_ocorr'], d['dt_notif'], d['onde_ocorreu'],
+                            d['tipo_incidente'], d['classificacao_incidente'],
+                            d['descricao_notificacao'], d['nome_do_paciente'],
+                            d['leito_paciente'], d['setor_notificante_bruto'],
+                            d['sugestao_nsp'], d['turno_planilha'], "PENDENTE"
+                        )
+
         else:
             st.info("📭 Nenhuma notificação marcada como ENVIADA ainda.")
 else:
