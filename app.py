@@ -159,6 +159,11 @@ st.set_page_config(page_title="Emissor de Memorandos", page_icon="📄", layout=
 st.title("📄 Emissor de Memorandos — Hospital da Cidade Dr. Jackson Lago")
 st.divider()
 
+# Dados fixos conforme solicitado
+TOTAL_GERAL = 964
+JA_ENVIADOS_INICIAL = 433
+PENDENTES_INICIAL = 531
+
 arquivo_excel = st.file_uploader("Carregue a Planilha (.xlsx)", type=["xlsx"])
 
 if arquivo_excel:
@@ -168,32 +173,19 @@ if arquivo_excel:
         if 'Status' not in df.columns:
             df.insert(1, 'Status', '')
         
-        total = len(df)
-        enviados = df['Status'].apply(lambda x: str(x).strip().upper() == "ENVIADO").sum()
-        pendentes = total - enviados
-        
-        try:
-            cols = list(df.columns)
-            an_idx = cols.index('AN') if 'AN' in cols else -1
-            ao_idx = cols.index('AO') if 'AO' in cols else -1
-            ap_idx = cols.index('AP') if 'AP' in cols else -1
-            if an_idx >= 0 and ao_idx >= 0 and ap_idx >= 0:
-                an_val = pd.to_numeric(df.iloc[0, an_idx], errors='coerce')
-                ao_val = pd.to_numeric(df.iloc[0, ao_idx], errors='coerce')
-                ap_val = pd.to_numeric(df.iloc[0, ap_idx], errors='coerce')
-                if pd.notna(an_val) and pd.notna(ao_val) and pd.notna(ap_val):
-                    total = int(an_val)
-                    enviados = int(ao_val)
-                    pendentes = int(ap_val)
-        except:
-            pass
+        # Conta quantos foram marcados como enviados na sessão atual
+        marcados_agora = df['Status'].apply(lambda x: str(x).strip().upper() == "ENVIADO").sum()
+        total_enviados = JA_ENVIADOS_INICIAL + marcados_agora
+        total_pendentes = PENDENTES_INICIAL - marcados_agora
+        if total_pendentes < 0:
+            total_pendentes = 0
         
         st.subheader("RESUMO GERAL")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total de Memorandos", total)
-        col2.metric("✅ Já Enviados", enviados)
-        col3.metric("⏳ Pendentes", pendentes)
-        st.info(f"{total} - {enviados} = {pendentes} memorandos pendentes")
+        col1.metric("Total de Memorandos", TOTAL_GERAL)
+        col2.metric("✅ Já Enviados", total_enviados)
+        col3.metric("⏳ Pendentes", total_pendentes)
+        st.info(f"{TOTAL_GERAL} - {total_enviados} = {total_pendentes} memorandos pendentes")
         st.divider()
         
         data_atual = datetime.now()
@@ -238,7 +230,12 @@ if arquivo_excel:
                 saudacao = "Boa noite,"
             
             titulo_memo = f"📋 Notificação Nº {num_notificacao} — {nome_paciente}"
-            with st.expander(titulo_memo, expanded=True):
+            
+            # Se já está enviado, risca o título
+            if status_atual == "ENVIADO":
+                titulo_memo = f"✅ ~~{titulo_memo}~~ — JÁ FOI ENVIADO"
+            
+            with st.expander(titulo_memo, expanded=(status_atual != "ENVIADO")):
                 marcado = st.checkbox(
                     "✅ Marcar como enviado",
                     value=(status_atual == "ENVIADO"),
@@ -250,19 +247,15 @@ if arquivo_excel:
                     df.at[idx, 'Status'] = ''
                 
                 st.divider()
-                st.write(f"📅 Data de Emissão: {data_extenso}")
-                st.write(f"📅 Data da Ocorrência: {data_ocorrencia} | Notificação: {data_notificacao}")
-                st.write(f"📍 Local: {localizacao}")
-                st.write(f"🏛️ Setor Notificante: {setor_notificante}")
-                st.write(f"📤 Setor Notificado: {setor_notificado}")
-                st.write(f"👤 Gestor: {gestor}")
-                st.write(f"⚠️ Tipo: {tipo_incidente} | Classificação: {classificacao_incidente}")
-                st.write(f"👤 Paciente: {nome_paciente} | Leito: {leito}")
-                st.write(f"💡 Sugestão: {sugestao}")
-                st.write(f"📧 E-mail para envio: {email_destino}")
                 
-                corpo_email = f"""
-{saudacao} Prezado(a),
+                # Apenas Setor Notificado e E-mail
+                st.write(f"📤 **Setor Notificado:** {setor_notificado if setor_notificado else 'Não informado'}")
+                st.write(f"📧 **E-mail para envio:** {email_destino}")
+                
+                st.divider()
+                
+                # Corpo do E-mail simplificado
+                corpo_email = f"""{saudacao} Prezado(a),
 
 Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
 para ser analisada e respondida (via e-mail) em até 15 dias após a data presente.
@@ -276,9 +269,9 @@ Ezequias S. Santos
 Agente Administrativo — NAQH / NSP
 Núcleo de Segurança do Paciente
 nspsoc2@gmail.com
-                """
-                with st.expander("Texto do E-mail"):
-                    st.text(corpo_email.strip())
+"""
+                with st.expander("📋 Copiar texto do e-mail"):
+                    st.code(corpo_email, language=None)
                 
                 dados_docx = {
                     "{{numero_memorando}}": num_memorando,
@@ -327,3 +320,11 @@ nspsoc2@gmail.com
         st.error(f"Erro ao processar arquivo: {str(e)}")
 else:
     st.info("👆 Faça upload da sua planilha Excel (.xlsx) para começar")
+    
+    # Mostra os dados mesmo sem arquivo carregado
+    st.subheader("RESUMO GERAL")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total de Memorandos", TOTAL_GERAL)
+    col2.metric("✅ Já Enviados", JA_ENVIADOS_INICIAL)
+    col3.metric("⏳ Pendentes", PENDENTES_INICIAL)
+    st.info(f"{TOTAL_GERAL} - {JA_ENVIADOS_INICIAL} = {PENDENTES_INICIAL} memorandos pendentes")
