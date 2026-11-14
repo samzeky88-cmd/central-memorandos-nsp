@@ -23,6 +23,15 @@ st.markdown("""
 
 # ---------------------- FUNÇÕES AUXILIARES ----------------------
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
+    titulos_negrito = (
+        "MEMO:", "DE:", "PARA:", "ASSUNTO:",
+        "DATA DA OCORRÊNCIA:", "DATA DA NOTIFICAÇÃO:",
+        "TURNO QUE OCORREU INCIDENTE:", "ONDE OCORREU INCIDENTE:",
+        "TIPO DE INCIDENTE:", "CLASSIFICAÇÃO DO INCIDENTE:",
+        "DESCRIÇÃO DA NOTIFICAÇÃO:", "PACIENTE:", "LEITO:",
+        "SETOR NOTIFICANTE:", "SUGESTÃO:"
+    )
+
     def processar_paragrafo(paragrafo):
         texto_atual = paragrafo.text
         if not any(tag in texto_atual for tag in dicionario_tags):
@@ -53,13 +62,13 @@ def substituir_texto_protegendo_logos(doc, dicionario_tags):
             if tamanho_fonte:
                 run.font.size = tamanho_fonte
 
-        prefixos_lista = ("•", "MEMO:", "DE:", "PARA:", "ASSUNTO:", "SUGESTÃO:")
-        if ":" in texto_atual and texto_atual.strip().startswith(prefixos_lista):
+        texto_limpo = texto_atual.lstrip("• \t")
+        if ":" in texto_atual and any(texto_limpo.startswith(t) for t in titulos_negrito):
             partes = texto_atual.split(":", 1)
-            run_titulo = paragrafo.add_run(partes + ":")
+            run_titulo = paragrafo.add_run(partes[0] + ":")
             aplicar_estilo(run_titulo, True)
 
-            run_valor = paragrafo.add_run(partes)
+            run_valor = paragrafo.add_run(partes[1])
             aplicar_estilo(run_valor, False)
         else:
             run_geral = paragrafo.add_run(texto_atual)
