@@ -18,6 +18,7 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
 # ---------------------- FUNÇÕES AUXILIARES ----------------------
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
     for paragrafo in doc.paragraphs:
@@ -36,7 +37,6 @@ def substituir_texto_protegendo_logos(doc, dicionario_tags):
                                 if tag in run.text:
                                     run.text = run.text.replace(tag, valor)
 
-
 def formatar_data_br(valor):
     try:
         if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
@@ -44,7 +44,6 @@ def formatar_data_br(valor):
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except:
         return str(valor).strip()
-
 
 def limpar_numero_float(valor):
     if pd.isna(valor) or str(valor).strip().lower() == "nan":
@@ -59,12 +58,10 @@ def limpar_numero_float(valor):
     except:
         return str(valor)
 
-
 def tratar_str_limpa(valor):
     if pd.isna(valor) or str(valor).strip().lower() in ("nan", "none", ""):
         return ""
     return str(valor).strip()
-
 
 def obter_data_por_extenso(dt):
     meses = {
@@ -72,7 +69,6 @@ def obter_data_por_extenso(dt):
         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
-
 
 def extrair_memorandos_da_linha(linha, num_colunas):
     lista_memos = []
@@ -99,6 +95,18 @@ def extrair_memorandos_da_linha(linha, num_colunas):
                     "setor_notificado": setor_notif
                 })
     return lista_memos
+
+def renderizar_memorando(index, memo, linha, num_notif, data_extenso_envio,
+                         dt_ocorr, dt_notif, onde_ocorreu, tipo_incidente,
+                         classificacao_incidente, descricao_notificacao,
+                         nome_do_paciente, leito_paciente, setor_notificante_bruto,
+                         sugestao_nsp, turno_planilha, status_envio):
+
+    num_memo_cru = memo["numero_memo"]
+    email_destino = memo["email"]
+    gestor_destinatario = memo["gestor"] or "GESTOR DE ENFERMAGEM"
+    setor_notificado_final = memo["setor_notificado"] or onde_ocorreu
+
     num_memo_limpo = num_memo_cru.replace("Nº", "").replace("No", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
     nome_base_arquivo = f"MEMORANDO_N{num_memo_limpo}_NOTIF_N{num_notif}"
 
@@ -130,7 +138,6 @@ def extrair_memorandos_da_linha(linha, num_colunas):
         "{{data_envio}}": data_extenso_envio
     }
 
-    from datetime import timezone, timedelta
     fuso_brasilia = timezone(timedelta(hours=-3))
     hora_atual = datetime.now(fuso_brasilia).hour
     saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
@@ -193,3 +200,86 @@ def extrair_memorandos_da_linha(linha, num_colunas):
         st.code(corpo_email, language="text")
 
     st.markdown("---")
+
+def processar_linha(index, linha, num_colunas, data_extenso_envio):
+    num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
+    if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
+        return None, None, 0
+
+    status_envio = str(linha.iloc[1]).strip().upper() if num_colunas > 1 else "PENDENTE"
+
+    dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else ""
+    dt_notif = formatar_data_br(linha.iloc[3]) if num_colunas > 3 else ""
+    turno_planilha = str(linha.iloc[4]).strip().upper() if num_colunas > 4 else ""
+    onde_ocorreu = tratar_str_limpa(linha.iloc[5]) if num_colunas > 5 else "Não informado"
+    tipo_incidente = tratar_str_limpa(linha.iloc[6]) if num_colunas > 6 else ""
+    classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
+    descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
+
+    nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
+    if nome_do_paciente.upper() == "PACIENTE":
+        return None, None, 0
+
+    leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
+    setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
+    sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else ""
+
+    lista_memos = extrair_memorandos_da_linha(linha, num_colunas)
+    if not lista_memos:
+        return None, None, 0
+
+    return status_envio, {
+        "index": index,
+        "linha": linha,
+        "num_notif": num_notif,
+        "dt_ocorr": dt_ocorr,
+        "dt_notif": dt_notif,
+        "turno_planilha": turno_planilha,
+        "onde_ocorreu": onde_ocorreu,
+        "tipo_incidente": tipo_incidente,
+        "classificacao_incidente": classificacao_incidente,
+        "descricao_notificacao": descricao_notificacao,
+        "nome_do_paciente": nome_do_paciente,
+        "leito_paciente": leito_paciente,
+        "setor_notificante_bruto": setor_notificante_bruto,
+        "sugestao_nsp": sugestao_nsp,
+        "lista_memos": lista_memos
+    }, len(lista_memos)
+['classificacao_incidente'],
+                            d['descricao_notificacao'], d['nome_do_paciente'],
+                            d['leito_paciente'], d['setor_notificante_bruto'],
+                            d['sugestao_nsp'], d['turno_planilha'], "PENDENTE"
+                        )
+        else:
+            st.info("✅ Nenhuma notificação pendente!")
+
+    with tab_env:
+        if lista_enviados:
+            st.markdown("## ✅ Notificações Já Enviadas")
+            for d in lista_enviados:
+                with st.container():
+                    st.markdown(f"### 📋 Notificação Nº {d['num_notif']} — {d['nome_do_paciente']}")
+                    st.markdown(f"""
+                    - **Data Ocorrência:** {d['dt_ocorr']} | **Data Notificação:** {d['dt_notif']}
+                    - **Local:** {d['onde_ocorreu']} | **Turno:** {d['turno_planilha']}
+                    - **Tipo:** {d['tipo_incidente']} | **Classificação:** {d['classificacao_incidente']}
+                    - **Leito:** {d['leito_paciente']} | **Setor Notificante:** {d['setor_notificante_bruto']}
+                    """)
+                    with st.expander("Ver descrição completa da notificação"):
+                        st.info(d['descricao_notificacao'])
+                        if d['sugestao_nsp']:
+                            st.success(f"💡 Sugestão NSP: {d['sugestao_nsp']}")
+                    st.markdown("---")
+                    for memo in d['lista_memos']:
+                        renderizar_memorando(
+                            d['index'], memo, d['linha'], d['num_notif'], data_extenso_envio,
+                            d['dt_ocorr'], d['dt_notif'], d['onde_ocorreu'],
+                            d['tipo_incidente'], d['classificacao_incidente'],
+                            d['descricao_notificacao'], d['nome_do_paciente'],
+                            d['leito_paciente'], d['setor_notificante_bruto'],
+                            d['sugestao_nsp'], d['turno_planilha'], "ENVIADO"
+                        )
+        else:
+            st.info("📭 Nenhuma notificação marcada como ENVIADA ainda.")
+else:
+    st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
