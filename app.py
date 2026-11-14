@@ -1,5 +1,7 @@
 import os
 import io
+import subprocess
+import tempfile
 import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta, timezone
@@ -21,22 +23,48 @@ st.markdown("""
 
 # ---------------------- FUNÇÕES AUXILIARES ----------------------
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
-    for paragrafo in doc.paragraphs:
+    def processar_paragrafo(paragrafo):
         for tag, valor in dicionario_tags.items():
             if tag in paragrafo.text:
+                substituido_no_run = False
                 for run in paragrafo.runs:
                     if tag in run.text:
                         run.text = run.text.replace(tag, valor)
+                        substituido_no_run = True
+                if not substituido_no_run and paragrafo.runs:
+                    texto_completo = paragrafo.text.replace(tag, valor)
+                    paragrafo.runs[0].text = texto_completo
+                    for r in paragrafo.runs[1:]:
+                        r.text = ""
+
+    for paragrafo in doc.paragraphs:
+        processar_paragrafo(paragrafo)
 
     for tabela in doc.tables:
         for linha in tabela.rows:
             for celula in linha.cells:
                 for paragrafo in celula.paragraphs:
-                    for tag, valor in dicionario_tags.items():
-                        if tag in paragrafo.text:
-                            for run in paragrafo.runs:
-                                if tag in run.text:
-                                    run.text = run.text.replace(tag, valor)
+                    processar_paragrafo(paragrafo)
+
+def converter_docx_para_pdf_bytes(docx_bytes):
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            caminho_docx = os.path.join(tmpdir, "temp.docx")
+            caminho_pdf = os.path.join(tmpdir, "temp.pdf")
+            with open(caminho_docx, "wb") as f:
+                f.write(docx_bytes)
+            subprocess.run(
+                ["libreoffice", "--headless", "--convert-to", "pdf", caminho_docx, "--outdir", tmpdir],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            if os.path.exists(caminho_pdf):
+                with open(caminho_pdf, "rb") as f:
+                    return f.read()
+    except Exception:
+        return None
+    return None
 
 def formatar_data_br(valor):
     try:
@@ -97,7 +125,6 @@ def extrair_memorandos_da_linha(linha, num_colunas):
                     "setor_notificado": setor_notif
                 })
     return lista_memos
-
 def renderizar_memorando(
     index, memo_idx, memo, linha, num_notif, data_extenso_envio, dt_ocorr, dt_notif,
     onde_ocorreu, tipo_incidente, classificacao_incidente, descricao_notificacao,
@@ -147,9 +174,15 @@ def renderizar_memorando(
         "{{n}}": marca_noite,
         "{{data_envio}}": data_extenso_envio
     }
+
     fuso_brasilia = timezone(timedelta(hours=-3))
     hora_atual = datetime.now(fuso_brasilia).hour
-    saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
+    if hora_atual < 12:
+        saudacao = "Bom Dia Prezados"
+    elif hora_atual < 18:
+        saudacao = "Boa Tarde Prezados"
+    else:
+        saudacao = "Boa Noite Prezados"
 
     corpo_email = (
         f"{saudacao},\n\n"
@@ -179,40 +212,45 @@ def renderizar_memorando(
         else:
             st.markdown(f"**🔹 {nome_do_paciente}**")
 
-    word_io = None
+    word_bytes = None
     caminho_modelo = "modelo_memorando.docx"
     if os.path.exists(caminho_modelo):
         doc_word = Document(caminho_modelo)
         substituir_texto_protegendo_logos(doc_word, dados_memorando)
         word_io = io.BytesIO()
         doc_word.save(word_io)
-        word_io.seek(0)
+        word_bytes = word_io.getvalue()
+    else:
+        st.error("Arquivo 'modelo_memorando.docx' não encontrado no servidor.")
 
     with col_word:
-        if word_io:
+        if word_bytes:
             st.download_button(
                 label="📄 WORD",
-                data=word_io.getvalue(),
+                data=word_bytes,
                 file_name=f"{nome_base_arquivo}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 key=f"w_{status_envio}_{index}_{memo_idx}_{num_memo_limpo}"
             )
 
     with col_pdf:
-        if word_io:
-            st.download_button(
-                label="📕 PDF",
-                data=word_io.getvalue(),
-                file_name=f"{nome_base_arquivo}.pdf",
-                mime="application/pdf",
-                key=f"p_{status_envio}_{index}_{memo_idx}_{num_memo_limpo}"
-            )
+        if word_bytes:
+            pdf_bytes = converter_docx_para_pdf_bytes(word_bytes)
+            if pdf_bytes:
+                st.download_button(
+                    label="📕 PDF",
+                    data=pdf_bytes,
+                    file_name=f"{nome_base_arquivo}.pdf",
+                    mime="application/pdf",
+                    key=f"p_{status_envio}_{index}_{memo_idx}_{num_memo_limpo}"
+                )
+            else:
+                st.caption("⚠️ PDF indisponível (instale libreoffice)")
 
     with col_copiar:
         st.code(corpo_email, language="text")
 
     st.markdown("---")
-
 
 def processar_linha(index, linha, num_colunas, data_extenso_envio):
     def pegar_col(pos, padrao=""):
@@ -262,27 +300,51 @@ def processar_linha(index, linha, num_colunas, data_extenso_envio):
         "status_envio": status_envio,
         "lista_memos": lista_memos
     }
-
     return status_envio, dados_linha, len(lista_memos)
 
+@st.cache_data
+def carregar_planilha(arquivo):
+    if arquivo.name.endswith(".csv"):
+        return pd.read_csv(arquivo)
+    return pd.read_excel(arquivo)
 
 # ---------------------- INTERFACE PRINCIPAL ----------------------
 arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações (.xlsx ou .csv)", type=["xlsx", "csv"])
 
 if arquivo_planilha is not None:
-    if arquivo_planilha.name.endswith(".csv"):
-        df = pd.read_csv(arquivo_planilha)
-    else:
-        df = pd.read_excel(arquivo_planilha)
+    df = carregar_planilha(arquivo_planilha)
+
+    col_busca, col_filtro = st.columns([2, 1])
+    with col_busca:
+        termo_pesquisa = st.text_input(
+            "🔍 Pesquisar por Nº da Notificação ou Nº do Memorando:",
+            placeholder="Ex: 886 ou 1192"
+        ).strip().upper()
+    with col_filtro:
+        st.write("")
+        st.write("")
+        apenas_pendentes = st.checkbox("Mostrar apenas Pendentes", value=False)
 
     fuso_brasilia = timezone(timedelta(hours=-3))
     data_extenso_envio = obter_data_por_extenso(datetime.now(fuso_brasilia))
     num_colunas = len(df.columns)
+    encontrados = 0
 
     for index, linha in df.iterrows():
         status, dados, qtd = processar_linha(index, linha, num_colunas, data_extenso_envio)
         if dados:
+            if apenas_pendentes and dados["status_envio"] == "ENVIADO":
+                continue
+
             for memo_idx, memo in enumerate(dados["lista_memos"]):
+                num_notif_str = str(dados["num_notif"]).upper()
+                num_memo_str = str(memo["numero_memo"]).upper()
+
+                if termo_pesquisa:
+                    if termo_pesquisa not in num_notif_str and termo_pesquisa not in num_memo_str:
+                        continue
+
+                encontrados += 1
                 renderizar_memorando(
                     index=dados["index"],
                     memo_idx=memo_idx,
@@ -303,3 +365,6 @@ if arquivo_planilha is not None:
                     turno_planilha=dados["turno_planilha"],
                     status_envio=dados["status_envio"]
                 )
+
+    if encontrados == 0:
+        st.warning("Nenhum memorando encontrado com esse filtro.")
