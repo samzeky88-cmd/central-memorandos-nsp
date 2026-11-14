@@ -140,15 +140,15 @@ def extrair_memorandos_da_linha(linha, num_colunas):
     lista_memos = []
     campos = [
         (15, 16, 17, 13, 14),
-        (18, 19, 20, 21, 22),
-        (23, 24, 25, 26, 27),
-        (28, 29, 30, 31, 32),
-        (33, 34, 35, 36, 37),
+        (20, 21, 22, 18, 19),
+        (25, 26, 27, 23, 24),
+        (30, 31, 32, 28, 29),
+        (35, 36, 37, 33, 34),
     ]
     for idx_memo, idx_resp, idx_email, idx_gestor, idx_setor in campos:
         if num_colunas > idx_memo:
             num_memo = limpar_numero_float(linha.iat[idx_memo])
-            if num_memo and "Nº MEMO" not in num_memo.upper() and num_memo not in ("", "0", "-"):
+            if num_memo and "Nº MEMO" not in num_memo.upper() and num_memo not in ("", "0", "0.0", "-"):
                 resposta = tratar_str_limpa(linha.iat[idx_resp]) if num_colunas > idx_resp else ""
                 email = tratar_str_limpa(linha.iat[idx_email]) if num_colunas > idx_email else ""
                 gestor = tratar_str_limpa(linha.iat[idx_gestor]) if num_colunas > idx_gestor else ""
@@ -237,9 +237,11 @@ def renderizar_memorando(
         f"Agente Administrativo - NAQH & NSP"
     )
 
+    badge_status = "🟢 ENVIADO" if status_envio == "ENVIADO" else ("🟡 EM ANÁLISE" if status_envio == "ANALISE" else "🔵 PENDENTE")
+
     st.markdown(
         f"**📄 Notificação: Nº {num_notif} | Memorando: {num_memo_cru}** → "
-        f"**{setor_notificado_final}** | *{gestor_destinatario}*"
+        f"**{setor_notificado_final}** | *{gestor_destinatario}* — **{badge_status}**"
     )
     if email_destino:
         st.caption(f"📧 E-mail: {email_destino}")
@@ -301,25 +303,22 @@ def processar_linha(index, linha, num_colunas, data_extenso_envio):
     def pegar_col(pos, padrao=""):
         return linha.iat[pos] if num_colunas > pos else padrao
 
+    # Bloqueia linhas sem número de notificação válido ou cabeçalhos/rodapés
     num_notif_bruto = limpar_numero_float(pegar_col(0, ""))
-    if num_notif_bruto.upper() in ("STATUS", "Nº", "N°", "0") or "NOTIF" in num_notif_bruto.upper():
+    if num_notif_bruto.upper() in ("STATUS", "Nº", "N°", "0", "") or "NOTIF" in num_notif_bruto.upper():
         return None, None, 0
 
+    # Bloqueia linhas sem nome de paciente válido
     nome_do_paciente = tratar_str_limpa(pegar_col(9, ""))
-    if nome_do_paciente.upper() == "PACIENTE":
+    if nome_do_paciente.upper() in ("PACIENTE", "", "0"):
         return None, None, 0
 
-    if num_notif_bruto == "" and nome_do_paciente == "":
-        return None, None, 0
-
-    num_notif = num_notif_bruto if num_notif_bruto != "" else "S-N"
-    if nome_do_paciente == "":
-        nome_do_paciente = "Paciente Não Identificado"
+    num_notif = num_notif_bruto
 
     status_celula = tratar_str_limpa(pegar_col(1, "")).upper()
-    if status_celula == "ENVIADO":
+    if "ENVIAD" in status_celula and "NÃO" not in status_celula and "NAO" not in status_celula:
         status_envio = "ENVIADO"
-    elif status_celula in ("ANALISE", "ANÁLISE"):
+    elif "ANALIS" in status_celula or "ANÁLIS" in status_celula:
         status_envio = "ANALISE"
     else:
         status_envio = "PENDENTE"
@@ -372,33 +371,53 @@ arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações 
 if arquivo_planilha is not None:
     df = carregar_planilha(arquivo_planilha)
 
-    col_busca, col_filtro = st.columns(2)
-    with col_busca:
-        termo_pesquisa = st.text_input(
-            "🔍 Pesquisar por Nº da Notificação ou Nº do Memorando:",
-            placeholder="Ex: 896 ou 1192"
-        ).strip().upper()
-    with col_filtro:
-        st.write("")
-        st.write("")
-        apenas_pendentes = st.checkbox("Mostrar apenas Pendentes / Em Análise", value=False)
-
     fuso_brasilia = timezone(timedelta(hours=-3))
     data_extenso_envio = obter_data_por_extenso(datetime.now(fuso_brasilia))
     num_colunas = len(df.columns)
 
     registros_validos = []
+    qtd_pendentes = 0
+    qtd_analise = 0
+    qtd_enviados = 0
+
     for index, linha in df.iterrows():
         status, dados, qtd = processar_linha(index, linha, num_colunas, data_extenso_envio)
         if dados:
             registros_validos.append(dados)
+            if status == "ENVIADO":
+                qtd_enviados += qtd
+            elif status == "ANALISE":
+                qtd_analise += qtd
+            else:
+                qtd_pendentes += qtd
 
-    # Ordena numericamente pelo número da notificação do maior para o menor
-    registros_validos.sort(key=lambda item: (item["ordem_num"], item["index"]), reverse=True)
+    st.info(f"📊 **Resumo da Planilha:** 🔵 **{qtd_pendentes}** Pendentes | 🟡 **{qtd_analise}** Em Análise | 🟢 **{qtd_enviados}** Já Enviados")
+
+    col_busca, col_status, col_ordem = st.columns([2, 1.2, 1.2])
+    with col_busca:
+        termo_pesquisa = st.text_input(
+            "🔍 Pesquisar por Nº da Notificação ou Nº do Memorando:",
+            placeholder="Ex: 896 ou 1192"
+        ).strip().upper()
+    with col_status:
+        filtro_status = st.selectbox(
+            "📌 Filtrar por Status:",
+            ["Todos (Pendentes + Enviados)", "Somente Pendentes / Em Análise", "Somente Já Enviados (🟢)"]
+        )
+    with col_ordem:
+        ordem_exibicao = st.selectbox(
+            "🔢 Ordem das Notificações:",
+            ["Maior para o Menor (1535 → 886)", "Menor para o Maior (886 → 1535)"]
+        )
+
+    reverso = (ordem_exibicao == "Maior para o Menor (1535 → 886)")
+    registros_validos.sort(key=lambda item: (item["ordem_num"], item["index"]), reverse=reverso)
 
     encontrados = 0
     for dados in registros_validos:
-        if apenas_pendentes and dados["status_envio"] == "ENVIADO":
+        if filtro_status == "Somente Pendentes / Em Análise" and dados["status_envio"] == "ENVIADO":
+            continue
+        if filtro_status == "Somente Já Enviados (🟢)" and dados["status_envio"] != "ENVIADO":
             continue
 
         for memo_idx, memo in enumerate(dados["lista_memos"]):
