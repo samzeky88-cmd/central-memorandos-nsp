@@ -75,11 +75,11 @@ def obter_data_por_extenso(dt):
 def extrair_memorandos_da_linha(linha, num_colunas):
     lista_memos = []
     campos = [
-        (15, 16, 17, 13, 14),
-        (18, 19, 20, 21, 22),
-        (23, 24, 25, 26, 27),
-        (28, 29, 30, 31, 32),
-        (33, 34, 35, 36, 37),
+        (17, 18, 19, 15, 16),
+        (20, 21, 22, 23, 24),
+        (25, 26, 27, 28, 29),
+        (30, 31, 32, 33, 34),
+        (35, 36, 37, 38, 39),
     ]
     for idx_memo, idx_resp, idx_email, idx_gestor, idx_setor in campos:
         if num_colunas > idx_memo:
@@ -99,7 +99,7 @@ def extrair_memorandos_da_linha(linha, num_colunas):
     return lista_memos
 
 def renderizar_memorando(
-    index, memo, linha, num_notif, data_extenso_envio, dt_ocorr, dt_notif,
+    index, memo_idx, memo, linha, num_notif, data_extenso_envio, dt_ocorr, dt_notif,
     onde_ocorreu, tipo_incidente, classificacao_incidente, descricao_notificacao,
     nome_do_paciente, leito_paciente, setor_notificante_bruto, sugestao_nsp,
     turno_planilha, status_envio
@@ -195,7 +195,7 @@ def renderizar_memorando(
                 data=word_io.getvalue(),
                 file_name=f"{nome_base_arquivo}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key=f"w_{status_envio}_{index}_{num_memo_limpo}"
+                key=f"w_{status_envio}_{index}_{memo_idx}_{num_memo_limpo}"
             )
 
     with col_pdf:
@@ -205,7 +205,7 @@ def renderizar_memorando(
                 data=word_io.getvalue(),
                 file_name=f"{nome_base_arquivo}.pdf",
                 mime="application/pdf",
-                key=f"p_{status_envio}_{index}_{num_memo_limpo}"
+                key=f"p_{status_envio}_{index}_{memo_idx}_{num_memo_limpo}"
             )
 
     with col_copiar:
@@ -215,26 +215,26 @@ def renderizar_memorando(
 
 
 def processar_linha(index, linha, num_colunas, data_extenso_envio):
-    num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
+    num_notif = limpar_numero_float(linha.iloc) if num_colunas > 0 else "S-N"
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
         return None, None, 0
 
-    status_envio = str(linha.iloc[1]).strip().upper() if num_colunas > 1 else "PENDENTE"
-    dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else ""
-    dt_notif = formatar_data_br(linha.iloc[3]) if num_colunas > 3 else ""
-    turno_planilha = str(linha.iloc[4]).strip().upper() if num_colunas > 4 else ""
-    onde_ocorreu = tratar_str_limpa(linha.iloc[5]) if num_colunas > 5 else "Não informado"
-    tipo_incidente = tratar_str_limpa(linha.iloc[6]) if num_colunas > 6 else ""
-    classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
-    descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
-    nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
+    status_envio = str(linha.iloc).strip().upper() if num_colunas > 1 else "PENDENTE"
+    dt_ocorr = formatar_data_br(linha.iloc) if num_colunas > 2 else ""
+    dt_notif = formatar_data_br(linha.iloc) if num_colunas > 3 else ""
+    turno_planilha = str(linha.iloc).strip().upper() if num_colunas > 4 else ""
+    onde_ocorreu = tratar_str_limpa(linha.iloc) if num_colunas > 5 else "Não informado"
+    tipo_incidente = tratar_str_limpa(linha.iloc) if num_colunas > 6 else ""
+    classificacao_incidente = tratar_str_limpa(linha.iloc) if num_colunas > 7 else ""
+    descricao_notificacao = tratar_str_limpa(linha.iloc) if num_colunas > 8 else ""
+    nome_do_paciente = tratar_str_limpa(linha.iloc) if num_colunas > 9 else "Paciente Não Identificado"
 
     if nome_do_paciente.upper() == "PACIENTE":
         return None, None, 0
 
-    leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
-    setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
-    sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else ""
+    leito_paciente = limpar_numero_float(linha.iloc) if num_colunas > 10 else ""
+    setor_notificante_bruto = tratar_str_limpa(linha.iloc) if num_colunas > 11 else ""
+    sugestao_nsp = tratar_str_limpa(linha.iloc) if num_colunas > 12 else ""
 
     lista_memos = extrair_memorandos_da_linha(linha, num_colunas)
     if not lista_memos:
@@ -279,9 +279,10 @@ if arquivo_planilha is not None:
     for index, linha in df.iterrows():
         status, dados, qtd = processar_linha(index, linha, num_colunas, data_extenso_envio)
         if dados:
-            for memo in dados["lista_memos"]:
+            for memo_idx, memo in enumerate(dados["lista_memos"]):
                 renderizar_memorando(
                     index=dados["index"],
+                    memo_idx=memo_idx,
                     memo=memo,
                     linha=dados["linha"],
                     num_notif=dados["num_notif"],
