@@ -7,10 +7,8 @@ import streamlit as st
 from datetime import datetime, timedelta, timezone
 from docx import Document
 
-# ---------------------- CONFIGURAÇÃO DA PÁGINA ----------------------
 st.set_page_config(page_title="Gerador de Memorandos", page_icon="🏥", layout="wide")
 
-# ---------------------- CABEÇALHO COM ÍCONE ----------------------
 st.markdown("""
 <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
     <span style="font-size: 40px;">🏥</span>
@@ -21,7 +19,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------------- FUNÇÕES AUXILIARES ----------------------
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
     titulos_negrito = (
         "MEMO:", "DE:", "PARA:", "ASSUNTO:",
@@ -64,11 +61,14 @@ def substituir_texto_protegendo_logos(doc, dicionario_tags):
 
         texto_limpo = texto_atual.lstrip("• \t")
         if ":" in texto_atual and any(texto_limpo.startswith(t) for t in titulos_negrito):
-            partes = texto_atual.split(":", 1)
-            run_titulo = paragrafo.add_run(partes[0] + ":")
+            indice_dois_pontos = texto_atual.index(":")
+            parte_titulo = texto_atual[:indice_dois_pontos + 1]
+            parte_valor = texto_atual[indice_dois_pontos + 1:]
+
+            run_titulo = paragrafo.add_run(parte_titulo)
             aplicar_estilo(run_titulo, True)
 
-            run_valor = paragrafo.add_run(partes[1])
+            run_valor = paragrafo.add_run(parte_valor)
             aplicar_estilo(run_valor, False)
         else:
             run_geral = paragrafo.add_run(texto_atual)
@@ -136,7 +136,6 @@ def obter_data_por_extenso(dt):
         9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
-
 def extrair_memorandos_da_linha(linha, num_colunas):
     lista_memos = []
     campos = [
@@ -162,6 +161,7 @@ def extrair_memorandos_da_linha(linha, num_colunas):
                     "setor_notificado": setor_notif
                 })
     return lista_memos
+
 def renderizar_memorando(
     index, memo_idx, memo, linha, num_notif, data_extenso_envio, dt_ocorr, dt_notif,
     onde_ocorreu, tipo_incidente, classificacao_incidente, descricao_notificacao,
@@ -290,3 +290,127 @@ def renderizar_memorando(
         st.code(corpo_email, language="text")
 
     st.markdown("---")
+def processar_linha(index, linha, num_colunas, data_extenso_envio):
+    def pegar_col(pos, padrao=""):
+        return linha.iat[pos] if num_colunas > pos else padrao
+
+    num_notif_bruto = limpar_numero_float(pegar_col(0, ""))
+    if num_notif_bruto.upper() in ("STATUS", "Nº", "N°") or "NOTIF" in num_notif_bruto.upper():
+        return None, None, 0
+
+    num_notif = num_notif_bruto if num_notif_bruto != "" else "S-N"
+
+    status_celula = tratar_str_limpa(pegar_col(1, "")).upper()
+    if status_celula == "ENVIADO":
+        status_envio = "ENVIADO"
+    elif status_celula in ("ANALISE", "ANÁLISE"):
+        status_envio = "ANALISE"
+    else:
+        status_envio = "PENDENTE"
+
+    dt_ocorr = formatar_data_br(pegar_col(2, ""))
+    dt_notif = formatar_data_br(pegar_col(3, ""))
+    turno_planilha = str(pegar_col(4, "")).strip().upper()
+    onde_ocorreu = tratar_str_limpa(pegar_col(5, "Não informado"))
+    tipo_incidente = tratar_str_limpa(pegar_col(6, ""))
+    classificacao_incidente = tratar_str_limpa(pegar_col(7, ""))
+    descricao_notificacao = tratar_str_limpa(pegar_col(8, ""))
+    nome_do_paciente = tratar_str_limpa(pegar_col(9, "Paciente Não Identificado"))
+
+    if nome_do_paciente.upper() == "PACIENTE":
+        return None, None, 0
+
+    leito_paciente = limpar_numero_float(pegar_col(10, ""))
+    setor_notificante_bruto = tratar_str_limpa(pegar_col(11, ""))
+    sugestao_nsp = tratar_str_limpa(pegar_col(12, ""))
+
+    lista_memos = extrair_memorandos_da_linha(linha, num_colunas)
+    if not lista_memos:
+        return None, None, 0
+
+    dados_linha = {
+        "index": index,
+        "linha": linha,
+        "num_notif": num_notif,
+        "data_extenso_envio": data_extenso_envio,
+        "dt_ocorr": dt_ocorr,
+        "dt_notif": dt_notif,
+        "onde_ocorreu": onde_ocorreu,
+        "tipo_incidente": tipo_incidente,
+        "classificacao_incidente": classificacao_incidente,
+        "descricao_notificacao": descricao_notificacao,
+        "nome_do_paciente": nome_do_paciente,
+        "leito_paciente": leito_paciente,
+        "setor_notificante_bruto": setor_notificante_bruto,
+        "sugestao_nsp": sugestao_nsp,
+        "turno_planilha": turno_planilha,
+        "status_envio": status_envio,
+        "lista_memos": lista_memos
+    }
+    return status_envio, dados_linha, len(lista_memos)
+
+@st.cache_data
+def carregar_planilha(arquivo):
+    if arquivo.name.endswith(".csv"):
+        return pd.read_csv(arquivo)
+    return pd.read_excel(arquivo)
+
+arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações (.xlsx ou .csv)", type=["xlsx", "csv"])
+
+if arquivo_planilha is not None:
+    df = carregar_planilha(arquivo_planilha)
+
+    col_busca, col_filtro = st.columns([2, 1])
+    with col_busca:
+        termo_pesquisa = st.text_input(
+            "🔍 Pesquisar por Nº da Notificação ou Nº do Memorando:",
+            placeholder="Ex: 1278 ou 1534"
+        ).strip().upper()
+    with col_filtro:
+        st.write("")
+        st.write("")
+        apenas_pendentes = st.checkbox("Mostrar apenas Pendentes / Em Análise", value=True)
+
+    fuso_brasilia = timezone(timedelta(hours=-3))
+    data_extenso_envio = obter_data_por_extenso(datetime.now(fuso_brasilia))
+    num_colunas = len(df.columns)
+    encontrados = 0
+
+    for index, linha in df.iloc[::-1].iterrows():
+        status, dados, qtd = processar_linha(index, linha, num_colunas, data_extenso_envio)
+        if dados:
+            if apenas_pendentes and dados["status_envio"] == "ENVIADO":
+                continue
+
+            for memo_idx, memo in enumerate(dados["lista_memos"]):
+                num_notif_str = str(dados["num_notif"]).upper()
+                num_memo_str = str(memo["numero_memo"]).upper()
+
+                if termo_pesquisa:
+                    if termo_pesquisa not in num_notif_str and termo_pesquisa not in num_memo_str:
+                        continue
+
+                encontrados += 1
+                renderizar_memorando(
+                    index=dados["index"],
+                    memo_idx=memo_idx,
+                    memo=memo,
+                    linha=dados["linha"],
+                    num_notif=dados["num_notif"],
+                    data_extenso_envio=dados["data_extenso_envio"],
+                    dt_ocorr=dados["dt_ocorr"],
+                    dt_notif=dados["dt_notif"],
+                    onde_ocorreu=dados["onde_ocorreu"],
+                    tipo_incidente=dados["tipo_incidente"],
+                    classificacao_incidente=dados["classificacao_incidente"],
+                    descricao_notificacao=dados["descricao_notificacao"],
+                    nome_do_paciente=dados["nome_do_paciente"],
+                    leito_paciente=dados["leito_paciente"],
+                    setor_notificante_bruto=dados["setor_notificante_bruto"],
+                    sugestao_nsp=dados["sugestao_nsp"],
+                    turno_planilha=dados["turno_planilha"],
+                    status_envio=dados["status_envio"]
+                )
+
+    if encontrados == 0:
+        st.warning("Nenhum memorando encontrado com esse filtro.")
