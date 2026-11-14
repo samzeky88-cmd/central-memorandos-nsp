@@ -28,10 +28,15 @@ def substituir_texto_protegendo_logos(doc, dicionario_tags):
         if not any(tag in texto_atual for tag in dicionario_tags):
             return
 
-        primeiro_run = paragrafo.runs[0] if paragrafo.runs else None
-        era_negrito = primeiro_run.bold if primeiro_run else False
-        nome_fonte = primeiro_run.font.name if primeiro_run else None
-        tamanho_fonte = primeiro_run.font.size if primeiro_run else None
+        nome_fonte = None
+        tamanho_fonte = None
+        for r in paragrafo.runs:
+            if r.font.name:
+                nome_fonte = r.font.name
+            if r.font.size:
+                tamanho_fonte = r.font.size
+            if nome_fonte and tamanho_fonte:
+                break
 
         for tag, valor in dicionario_tags.items():
             if tag in texto_atual:
@@ -52,7 +57,7 @@ def substituir_texto_protegendo_logos(doc, dicionario_tags):
         if ":" in texto_atual and texto_atual.strip().startswith(prefixos_lista):
             partes = texto_atual.split(":", 1)
             run_titulo = paragrafo.add_run(partes[0] + ":")
-            aplicar_estilo(run_titulo, era_negrito)
+            aplicar_estilo(run_titulo, True)
 
             run_valor = paragrafo.add_run(partes[1])
             aplicar_estilo(run_valor, False)
