@@ -147,8 +147,8 @@ def extrair_memorandos_da_linha(linha, num_colunas):
     ]
     for idx_memo, idx_resp, idx_email, idx_gestor, idx_setor in campos:
         if num_colunas > idx_memo:
-            num_memo = tratar_str_limpa(linha.iat[idx_memo])
-            if num_memo and "Nº MEMO" not in num_memo.upper() and num_memo != "":
+            num_memo = limpar_numero_float(linha.iat[idx_memo])
+            if num_memo and "Nº MEMO" not in num_memo.upper() and num_memo not in ("", "0", "-"):
                 resposta = tratar_str_limpa(linha.iat[idx_resp]) if num_colunas > idx_resp else ""
                 email = tratar_str_limpa(linha.iat[idx_email]) if num_colunas > idx_email else ""
                 gestor = tratar_str_limpa(linha.iat[idx_gestor]) if num_colunas > idx_gestor else ""
@@ -182,7 +182,7 @@ def renderizar_memorando(
         .replace(" ", "")
         .strip()
     )
-    nome_base_arquivo = f"MEMORANDO_N{num_memo_limpo}_NOTIF_N{num_notif}"
+    nome_base_arquivo = f"NOTIF_N{num_notif}_MEMO_N{num_memo_limpo}"
 
     marca_manha = "X" if "MANH" in turno_planilha else ""
     marca_tarde = "X" if "TARD" in turno_planilha else ""
@@ -237,7 +237,10 @@ def renderizar_memorando(
         f"Agente Administrativo - NAQH & NSP"
     )
 
-    st.markdown(f"**📄 Memorando: {num_memo_cru}** → **{gestor_destinatario}** | *{setor_notificado_final}*")
+    st.markdown(
+        f"**📄 Notificação: Nº {num_notif} | Memorando: {num_memo_cru}** → "
+        f"**{setor_notificado_final}** | *{gestor_destinatario}*"
+    )
     if email_destino:
         st.caption(f"📧 E-mail: {email_destino}")
 
@@ -249,7 +252,7 @@ def renderizar_memorando(
         elif status_envio == "ANALISE":
             st.markdown(f"**🟡 {nome_do_paciente}** *(Em Análise)*")
         else:
-            st.markdown(f"**🔹 {nome_do_paciente}**")
+            st.markdown(f"**🔹 {nome_do_paciente}** *(Pendente)*")
 
     word_bytes = None
     caminho_modelo = "modelo_memorando.docx"
@@ -290,15 +293,28 @@ def renderizar_memorando(
         st.code(corpo_email, language="text")
 
     st.markdown("---")
+def extrair_valor_numerico_notif(num_notif_str):
+    digitos = "".join(ch for ch in str(num_notif_str) if ch.isdigit())
+    return int(digitos) if digitos else -1
+
 def processar_linha(index, linha, num_colunas, data_extenso_envio):
     def pegar_col(pos, padrao=""):
         return linha.iat[pos] if num_colunas > pos else padrao
 
     num_notif_bruto = limpar_numero_float(pegar_col(0, ""))
-    if num_notif_bruto.upper() in ("STATUS", "Nº", "N°") or "NOTIF" in num_notif_bruto.upper():
+    if num_notif_bruto.upper() in ("STATUS", "Nº", "N°", "0") or "NOTIF" in num_notif_bruto.upper():
+        return None, None, 0
+
+    nome_do_paciente = tratar_str_limpa(pegar_col(9, ""))
+    if nome_do_paciente.upper() == "PACIENTE":
+        return None, None, 0
+
+    if num_notif_bruto == "" and nome_do_paciente == "":
         return None, None, 0
 
     num_notif = num_notif_bruto if num_notif_bruto != "" else "S-N"
+    if nome_do_paciente == "":
+        nome_do_paciente = "Paciente Não Identificado"
 
     status_celula = tratar_str_limpa(pegar_col(1, "")).upper()
     if status_celula == "ENVIADO":
@@ -315,11 +331,6 @@ def processar_linha(index, linha, num_colunas, data_extenso_envio):
     tipo_incidente = tratar_str_limpa(pegar_col(6, ""))
     classificacao_incidente = tratar_str_limpa(pegar_col(7, ""))
     descricao_notificacao = tratar_str_limpa(pegar_col(8, ""))
-    nome_do_paciente = tratar_str_limpa(pegar_col(9, "Paciente Não Identificado"))
-
-    if nome_do_paciente.upper() == "PACIENTE":
-        return None, None, 0
-
     leito_paciente = limpar_numero_float(pegar_col(10, ""))
     setor_notificante_bruto = tratar_str_limpa(pegar_col(11, ""))
     sugestao_nsp = tratar_str_limpa(pegar_col(12, ""))
@@ -332,6 +343,7 @@ def processar_linha(index, linha, num_colunas, data_extenso_envio):
         "index": index,
         "linha": linha,
         "num_notif": num_notif,
+        "ordem_num": extrair_valor_numerico_notif(num_notif),
         "data_extenso_envio": data_extenso_envio,
         "dt_ocorr": dt_ocorr,
         "dt_notif": dt_notif,
@@ -360,57 +372,64 @@ arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações 
 if arquivo_planilha is not None:
     df = carregar_planilha(arquivo_planilha)
 
-    col_busca, col_filtro = st.columns([2, 1])
+    col_busca, col_filtro = st.columns(2)
     with col_busca:
         termo_pesquisa = st.text_input(
             "🔍 Pesquisar por Nº da Notificação ou Nº do Memorando:",
-            placeholder="Ex: 1278 ou 1534"
+            placeholder="Ex: 896 ou 1192"
         ).strip().upper()
     with col_filtro:
         st.write("")
         st.write("")
-        apenas_pendentes = st.checkbox("Mostrar apenas Pendentes / Em Análise", value=True)
+        apenas_pendentes = st.checkbox("Mostrar apenas Pendentes / Em Análise", value=False)
 
     fuso_brasilia = timezone(timedelta(hours=-3))
     data_extenso_envio = obter_data_por_extenso(datetime.now(fuso_brasilia))
     num_colunas = len(df.columns)
-    encontrados = 0
 
-    for index, linha in df.iloc[::-1].iterrows():
+    registros_validos = []
+    for index, linha in df.iterrows():
         status, dados, qtd = processar_linha(index, linha, num_colunas, data_extenso_envio)
         if dados:
-            if apenas_pendentes and dados["status_envio"] == "ENVIADO":
-                continue
+            registros_validos.append(dados)
 
-            for memo_idx, memo in enumerate(dados["lista_memos"]):
-                num_notif_str = str(dados["num_notif"]).upper()
-                num_memo_str = str(memo["numero_memo"]).upper()
+    # Ordena numericamente pelo número da notificação do maior para o menor
+    registros_validos.sort(key=lambda item: (item["ordem_num"], item["index"]), reverse=True)
 
-                if termo_pesquisa:
-                    if termo_pesquisa not in num_notif_str and termo_pesquisa not in num_memo_str:
-                        continue
+    encontrados = 0
+    for dados in registros_validos:
+        if apenas_pendentes and dados["status_envio"] == "ENVIADO":
+            continue
 
-                encontrados += 1
-                renderizar_memorando(
-                    index=dados["index"],
-                    memo_idx=memo_idx,
-                    memo=memo,
-                    linha=dados["linha"],
-                    num_notif=dados["num_notif"],
-                    data_extenso_envio=dados["data_extenso_envio"],
-                    dt_ocorr=dados["dt_ocorr"],
-                    dt_notif=dados["dt_notif"],
-                    onde_ocorreu=dados["onde_ocorreu"],
-                    tipo_incidente=dados["tipo_incidente"],
-                    classificacao_incidente=dados["classificacao_incidente"],
-                    descricao_notificacao=dados["descricao_notificacao"],
-                    nome_do_paciente=dados["nome_do_paciente"],
-                    leito_paciente=dados["leito_paciente"],
-                    setor_notificante_bruto=dados["setor_notificante_bruto"],
-                    sugestao_nsp=dados["sugestao_nsp"],
-                    turno_planilha=dados["turno_planilha"],
-                    status_envio=dados["status_envio"]
-                )
+        for memo_idx, memo in enumerate(dados["lista_memos"]):
+            num_notif_str = str(dados["num_notif"]).upper()
+            num_memo_str = str(memo["numero_memo"]).upper()
+
+            if termo_pesquisa:
+                if termo_pesquisa not in num_notif_str and termo_pesquisa not in num_memo_str:
+                    continue
+
+            encontrados += 1
+            renderizar_memorando(
+                index=dados["index"],
+                memo_idx=memo_idx,
+                memo=memo,
+                linha=dados["linha"],
+                num_notif=dados["num_notif"],
+                data_extenso_envio=dados["data_extenso_envio"],
+                dt_ocorr=dados["dt_ocorr"],
+                dt_notif=dados["dt_notif"],
+                onde_ocorreu=dados["onde_ocorreu"],
+                tipo_incidente=dados["tipo_incidente"],
+                classificacao_incidente=dados["classificacao_incidente"],
+                descricao_notificacao=dados["descricao_notificacao"],
+                nome_do_paciente=dados["nome_do_paciente"],
+                leito_paciente=dados["leito_paciente"],
+                setor_notificante_bruto=dados["setor_notificante_bruto"],
+                sugestao_nsp=dados["sugestao_nsp"],
+                turno_planilha=dados["turno_planilha"],
+                status_envio=dados["status_envio"]
+            )
 
     if encontrados == 0:
         st.warning("Nenhum memorando encontrado com esse filtro.")
