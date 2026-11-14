@@ -325,10 +325,12 @@ nspsoc2@gmail.com
                         "{{sugestao}}": sugestao,
                     }
                     
-                    arquivo_pronto = gerar_docx(dados_docx)
+                                       arquivo_pronto = gerar_docx(dados_docx)
                     if arquivo_pronto:
                         st.download_button(
                             label="📄 Baixar Memorando",
                             data=arquivo_pronto,
                             file_name=f"NSP_{num_memorando.replace('/', '_')}.docx",
-                            mime="application/vnd
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"download_pend_{num_notificacao}_{num_memorando}_{idx}"
+                        )
