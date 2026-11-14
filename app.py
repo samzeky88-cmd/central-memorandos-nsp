@@ -75,20 +75,20 @@ def obter_data_por_extenso(dt):
 def extrair_memorandos_da_linha(linha, num_colunas):
     lista_memos = []
     campos = [
-        (17, 18, 19, 15, 16),
-        (20, 21, 22, 23, 24),
-        (25, 26, 27, 28, 29),
-        (30, 31, 32, 33, 34),
-        (35, 36, 37, 38, 39),
+        (15, 16, 17, 13, 14),
+        (18, 19, 20, 21, 22),
+        (23, 24, 25, 26, 27),
+        (28, 29, 30, 31, 32),
+        (33, 34, 35, 36, 37),
     ]
     for idx_memo, idx_resp, idx_email, idx_gestor, idx_setor in campos:
         if num_colunas > idx_memo:
-            num_memo = tratar_str_limpa(linha.iloc[idx_memo])
+            num_memo = tratar_str_limpa(linha.iat[idx_memo])
             if num_memo and "Nº MEMO" not in num_memo.upper() and num_memo != "":
-                resposta = tratar_str_limpa(linha.iloc[idx_resp]) if num_colunas > idx_resp else ""
-                email = tratar_str_limpa(linha.iloc[idx_email]) if num_colunas > idx_email else ""
-                gestor = tratar_str_limpa(linha.iloc[idx_gestor]) if num_colunas > idx_gestor else ""
-                setor_notif = tratar_str_limpa(linha.iloc[idx_setor]) if num_colunas > idx_setor else ""
+                resposta = tratar_str_limpa(linha.iat[idx_resp]) if num_colunas > idx_resp else ""
+                email = tratar_str_limpa(linha.iat[idx_email]) if num_colunas > idx_email else ""
+                gestor = tratar_str_limpa(linha.iat[idx_gestor]) if num_colunas > idx_gestor else ""
+                setor_notif = tratar_str_limpa(linha.iat[idx_setor]) if num_colunas > idx_setor else ""
                 lista_memos.append({
                     "numero_memo": num_memo,
                     "resposta": resposta,
@@ -215,26 +215,29 @@ def renderizar_memorando(
 
 
 def processar_linha(index, linha, num_colunas, data_extenso_envio):
-    num_notif = limpar_numero_float(linha.iloc) if num_colunas > 0 else "S-N"
+    def pegar_col(pos, padrao=""):
+        return linha.iat[pos] if num_colunas > pos else padrao
+
+    num_notif = limpar_numero_float(pegar_col(0, "S-N"))
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
         return None, None, 0
 
-    status_envio = str(linha.iloc).strip().upper() if num_colunas > 1 else "PENDENTE"
-    dt_ocorr = formatar_data_br(linha.iloc) if num_colunas > 2 else ""
-    dt_notif = formatar_data_br(linha.iloc) if num_colunas > 3 else ""
-    turno_planilha = str(linha.iloc).strip().upper() if num_colunas > 4 else ""
-    onde_ocorreu = tratar_str_limpa(linha.iloc) if num_colunas > 5 else "Não informado"
-    tipo_incidente = tratar_str_limpa(linha.iloc) if num_colunas > 6 else ""
-    classificacao_incidente = tratar_str_limpa(linha.iloc) if num_colunas > 7 else ""
-    descricao_notificacao = tratar_str_limpa(linha.iloc) if num_colunas > 8 else ""
-    nome_do_paciente = tratar_str_limpa(linha.iloc) if num_colunas > 9 else "Paciente Não Identificado"
+    status_envio = str(pegar_col(1, "PENDENTE")).strip().upper()
+    dt_ocorr = formatar_data_br(pegar_col(2, ""))
+    dt_notif = formatar_data_br(pegar_col(3, ""))
+    turno_planilha = str(pegar_col(4, "")).strip().upper()
+    onde_ocorreu = tratar_str_limpa(pegar_col(5, "Não informado"))
+    tipo_incidente = tratar_str_limpa(pegar_col(6, ""))
+    classificacao_incidente = tratar_str_limpa(pegar_col(7, ""))
+    descricao_notificacao = tratar_str_limpa(pegar_col(8, ""))
+    nome_do_paciente = tratar_str_limpa(pegar_col(9, "Paciente Não Identificado"))
 
     if nome_do_paciente.upper() == "PACIENTE":
         return None, None, 0
 
-    leito_paciente = limpar_numero_float(linha.iloc) if num_colunas > 10 else ""
-    setor_notificante_bruto = tratar_str_limpa(linha.iloc) if num_colunas > 11 else ""
-    sugestao_nsp = tratar_str_limpa(linha.iloc) if num_colunas > 12 else ""
+    leito_paciente = limpar_numero_float(pegar_col(10, ""))
+    setor_notificante_bruto = tratar_str_limpa(pegar_col(11, ""))
+    sugestao_nsp = tratar_str_limpa(pegar_col(12, ""))
 
     lista_memos = extrair_memorandos_da_linha(linha, num_colunas)
     if not lista_memos:
