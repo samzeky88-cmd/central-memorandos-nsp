@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import streamlit as st
 import io
-import urllib.parse
 from datetime import datetime, timedelta, timezone
 from docx import Document
 
@@ -22,14 +21,12 @@ st.markdown("""
 
 # ---------------------- FUNÇÕES AUXILIARES ----------------------
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
-    """Substitui o texto alterando apenas os 'runs' para proteger imagens e cabeçalhos."""
     for paragrafo in doc.paragraphs:
         for tag, valor in dicionario_tags.items():
             if tag in paragrafo.text:
                 for run in paragrafo.runs:
                     if tag in run.text:
                         run.text = run.text.replace(tag, valor)
-
     for tabela in doc.tables:
         for linha in tabela.rows:
             for celula in linha.cells:
@@ -42,7 +39,6 @@ def substituir_texto_protegendo_logos(doc, dicionario_tags):
 
 
 def formatar_data_br(valor):
-    """Garante que as datas sejam exibidas no formato brasileiro DD/MM/AAAA"""
     try:
         if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
             return ""
@@ -52,7 +48,6 @@ def formatar_data_br(valor):
 
 
 def limpar_numero_float(valor):
-    """Remove o .0 de números inteiros vindos do Excel"""
     if pd.isna(valor) or str(valor).strip().lower() == "nan":
         return ""
     try:
@@ -67,14 +62,12 @@ def limpar_numero_float(valor):
 
 
 def tratar_str_limpa(valor):
-    """Evita que campos vazios ou nulos exibam a palavra 'nan'"""
     if pd.isna(valor) or str(valor).strip().lower() in ("nan", "none", ""):
         return ""
     return str(valor).strip()
 
 
 def obter_data_por_extenso(dt):
-    """Gera a data selecionada por extenso em português brasileiro"""
     meses = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
         7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
@@ -83,25 +76,14 @@ def obter_data_por_extenso(dt):
 
 
 def extrair_memorandos_da_linha(linha, num_colunas):
-    """
-    Lê TODOS os memorandos de uma mesma linha.
-    Colunas esperadas por índice (0-based):
-    15: Nº Memo 01 | 16: Resposta Memo 01 | 17: E-mail Setor 01 | 13: Gestor 01 | 14: Setor Notificado 01
-    18: Nº Memo 02 | 19: Resposta Memo 02 | 20: E-mail Setor 02 | 21: Gestor 02 | 22: Setor Notificado 02
-    23: Nº Memo 03 | 24: Resposta Memo 03 | 25: E-mail Setor 03 | 26: Gestor 03 | 27: Setor Notificado 03
-    28: Nº Memo 04 | 29: Resposta Memo 04 | 30: E-mail Setor 04 | 31: Gestor 04 | 32: Setor Notificado 04
-    33: Nº Memo 05 | 34: Resposta Memo 05 | 35: E-mail Setor 05 | 36: Gestor 05 | 37: Setor Notificado 05
-    """
     lista_memos = []
     campos = [
-        # (idx_memo, idx_resposta, idx_email, idx_gestor, idx_setor)
         (15, 16, 17, 13, 14),
         (18, 19, 20, 21, 22),
         (23, 24, 25, 26, 27),
         (28, 29, 30, 31, 32),
         (33, 34, 35, 36, 37),
     ]
-
     for idx_memo, idx_resp, idx_email, idx_gestor, idx_setor in campos:
         if num_colunas > idx_memo:
             num_memo = tratar_str_limpa(linha.iloc[idx_memo])
@@ -110,7 +92,6 @@ def extrair_memorandos_da_linha(linha, num_colunas):
                 email = tratar_str_limpa(linha.iloc[idx_email]) if num_colunas > idx_email else ""
                 gestor = tratar_str_limpa(linha.iloc[idx_gestor]) if num_colunas > idx_gestor else ""
                 setor_notif = tratar_str_limpa(linha.iloc[idx_setor]) if num_colunas > idx_setor else ""
-
                 lista_memos.append({
                     "numero_memo": num_memo,
                     "resposta": resposta,
@@ -118,7 +99,6 @@ def extrair_memorandos_da_linha(linha, num_colunas):
                     "gestor": gestor,
                     "setor_notificado": setor_notif
                 })
-
     return lista_memos
 
 
@@ -229,11 +209,10 @@ def renderizar_memorando(index, memo, linha, num_notif, data_extenso_envio,
     st.markdown("---")
 
 
-@st.fragment
-def renderizar_linha_paciente(index, linha, num_colunas, data_extenso_envio):
+def processar_linha(index, linha, num_colunas, data_extenso_envio):
     num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
     if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
-        return None, None
+        return None, None, 0
 
     status_envio = str(linha.iloc[1]).strip().upper() if num_colunas > 1 else "PENDENTE"
 
@@ -247,16 +226,51 @@ def renderizar_linha_paciente(index, linha, num_colunas, data_extenso_envio):
 
     nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
     if nome_do_paciente.upper() == "PACIENTE":
-        return None, None
+        return None, None, 0
 
     leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
     setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
     sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else ""
 
-    # Extrair TODOS os memorandos desta linha
     lista_memos = extrair_memorandos_da_linha(linha, num_colunas)
     if not lista_memos:
-        return None, None
+        return None, None, 0
+
+    return status_envio, {
+        "index": index,
+        "linha": linha,
+        "num_notif": num_notif,
+        "dt_ocorr": dt_ocorr,
+        "dt_notif": dt_notif,
+        "turno_planilha": turno_planilha,
+        "onde_ocorreu": onde_ocorreu,
+        "tipo_incidente": tipo_incidente,
+        "classificacao_incidente": classificacao_incidente,
+        "descricao_notificacao": descricao_notificacao,
+        "nome_do_paciente": nome_do_paciente,
+        "leito_paciente": leito_paciente,
+        "setor_notificante_bruto": setor_notificante_bruto,
+        "sugestao_nsp": sugestao_nsp,
+        "lista_memos": lista_memos
+    }, len(lista_memos)
+
+
+def exibir_card(dados):
+    index = dados["index"]
+    linha = dados["linha"]
+    num_notif = dados["num_notif"]
+    dt_ocorr = dados["dt_ocorr"]
+    dt_notif = dados["dt_notif"]
+    turno_planilha = dados["turno_planilha"]
+    onde_ocorreu = dados["onde_ocorreu"]
+    tipo_incidente = dados["tipo_incidente"]
+    classificacao_incidente = dados["classificacao_incidente"]
+    descricao_notificacao = dados["descricao_notificacao"]
+    nome_do_paciente = dados["nome_do_paciente"]
+    leito_paciente = dados["leito_paciente"]
+    setor_notificante_bruto = dados["setor_notificante_bruto"]
+    sugestao_nsp = dados["sugestao_nsp"]
+    lista_memos = dados["lista_memos"]
 
     with st.container():
         st.markdown(f"### 📋 Notificação Nº {num_notif} — {nome_do_paciente}")
@@ -278,10 +292,9 @@ def renderizar_linha_paciente(index, linha, num_colunas, data_extenso_envio):
                 dt_ocorr, dt_notif, onde_ocorreu, tipo_incidente,
                 classificacao_incidente, descricao_notificacao,
                 nome_do_paciente, leito_paciente, setor_notificante_bruto,
-                sugestao_nsp, turno_planilha, status_envio
+                sugestao_nsp, turno_planilha,
+                "ENVIADO" if status_global == "ENVIADO" else "PENDENTE"
             )
-
-    return status_envio, len(lista_memos)
 
 
 # ---------------------- INTERFACE PRINCIPAL ----------------------
@@ -297,7 +310,7 @@ if not os.path.exists(caminho_modelo):
 if arquivo_excel:
     df = pd.read_excel(arquivo_excel, header=None)
 
-    # Identificar e pular linha de cabeçalho
+    # Pular linha de cabeçalho
     if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0]) == "1"):
         df = df.iloc[1:]
     elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1]) == "1"):
@@ -312,31 +325,27 @@ if arquivo_excel:
         df = df.dropna(subset=[df.columns[9]])
         df = df[df[df.columns[9]].astype(str).str.strip() != ""]
 
-    # Contadores
-    total_notifs = 0
-    total_memos = 0
-    total_enviados = 0
-    total_pendentes = 0
+    # Leitura das colunas de estatísticas (AP, AQ, AR = índices 40, 41, 42)
+    # AP = Total Memos | AQ = Já Enviados | AR = Pendentes
+    total_memos_planilha = 0
+    enviados_planilha = 0
+    pendentes_planilha = 0
+    if num_colunas >= 43:
+        ap_val = tratar_str_limpa(df.iloc[:, 40].iloc[0])  # Coluna AP
+        aq_val = tratar_str_limpa(df.iloc[:, 41].iloc[0])  # Coluna AQ
+        ar_val = tratar_str_limpa(df.iloc[:, 42].iloc[0])  # Coluna AR
+        try:
+            total_memos_planilha = int(ap_val) if ap_val.isdigit() else 0
+            enviados_planilha = int(aq_val) if aq_val.isdigit() else 0
+            pendentes_planilha = int(ar_val) if ar_val.isdigit() else (total_memos_planilha - enviados_planilha)
+        except:
+            pass
 
-    # Separar em abas
-    tab_pend, tab_env = st.tabs(["⏳ Pendentes", "✅ Enviados"])
+    # Processar e separar linhas
+    lista_pendentes = []
+    lista_enviados = []
+    total_memos_contado = 0
+    total_enviados_contado = 0
+    total_pendentes_contado = 0
 
-    with tab_pend:
-        st.markdown("## ⏳ Notificações Pendentes")
-        for index, line in df.iterrows():
-            status_envio, qtd_memos = renderizar_linha_paciente(index, line, num_colunas, data_extenso_envio)
-            if status_envio and status_envio != "ENVIADO":
-                total_notifs += 1
-                total_memos += qtd_memos
-                total_pendentes += qtd_memos
-
-    with tab_env:
-        st.markdown("## ✅ Notificações Já Enviadas")
-        for index, line in df.iterrows():
-            status_envio, qtd_memos = renderizar_linha_paciente(index, line, num_colunas, data_extenso_envio)
-            if status_envio == "ENVIADO":
-                total_notifs += 1
-                total_memos += qtd_memos
-                total_enviados += qtd_memos
-
-    #
+    for
