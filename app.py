@@ -285,7 +285,7 @@ if arquivo_excel:
                     st.write(f"💡 Sugestão: {sugestao}")
                     st.write(f"📧 E-mail para envio: {email_destino}")
                     
-                    corpo_email = f"""
+                                      corpo_email = f"""
 {saudacao} Prezado(a),
 
 Segue em anexo a Notificação Nº {num_notificacao} referente ao Memorando {num_memorando},
@@ -301,7 +301,8 @@ Agente Administrativo — NAQH / NSP
 Núcleo de Segurança do Paciente
 nspsoc2@gmail.com
                     """
-                                       with st.expander("Texto do E-mail"):
+
+                    with st.expander("Texto do E-mail"):
                         st.text(corpo_email.strip())
 
                     dados_docx = {
