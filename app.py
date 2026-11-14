@@ -24,18 +24,41 @@ st.markdown("""
 # ---------------------- FUNÇÕES AUXILIARES ----------------------
 def substituir_texto_protegendo_logos(doc, dicionario_tags):
     def processar_paragrafo(paragrafo):
+        texto_atual = paragrafo.text
+        if not any(tag in texto_atual for tag in dicionario_tags):
+            return
+
+        primeiro_run = paragrafo.runs[0] if paragrafo.runs else None
+        era_negrito = primeiro_run.bold if primeiro_run else False
+        nome_fonte = primeiro_run.font.name if primeiro_run else None
+        tamanho_fonte = primeiro_run.font.size if primeiro_run else None
+
         for tag, valor in dicionario_tags.items():
-            if tag in paragrafo.text:
-                substituido_no_run = False
-                for run in paragrafo.runs:
-                    if tag in run.text:
-                        run.text = run.text.replace(tag, valor)
-                        substituido_no_run = True
-                if not substituido_no_run and paragrafo.runs:
-                    texto_completo = paragrafo.text.replace(tag, valor)
-                    paragrafo.runs[0].text = texto_completo
-                    for r in paragrafo.runs[1:]:
-                        r.text = ""
+            if tag in texto_atual:
+                texto_atual = texto_atual.replace(tag, str(valor))
+
+        for run in paragrafo.runs:
+            if not run._element.xpath('.//w:drawing | .//w:pict'):
+                run.text = ""
+
+        def aplicar_estilo(run, negrito):
+            run.bold = negrito
+            if nome_fonte:
+                run.font.name = nome_fonte
+            if tamanho_fonte:
+                run.font.size = tamanho_fonte
+
+        prefixos_lista = ("•", "MEMO:", "DE:", "PARA:", "ASSUNTO:", "SUGESTÃO:")
+        if ":" in texto_atual and texto_atual.strip().startswith(prefixos_lista):
+            partes = texto_atual.split(":", 1)
+            run_titulo = paragrafo.add_run(partes[0] + ":")
+            aplicar_estilo(run_titulo, era_negrito)
+
+            run_valor = paragrafo.add_run(partes[1])
+            aplicar_estilo(run_valor, False)
+        else:
+            run_geral = paragrafo.add_run(texto_atual)
+            aplicar_estilo(run_geral, False)
 
     for paragrafo in doc.paragraphs:
         processar_paragrafo(paragrafo)
@@ -168,7 +191,7 @@ def renderizar_memorando(
         "{{nome_paciente}}": nome_do_paciente,
         "{{leito}}": leito_paciente,
         "{{setor_notificante}}": setor_notificante_bruto,
-        "{{sugestao}}": sugestao_nsp,
+        "{{sugestão}}": sugestao_nsp,
         "{{m}}": marca_manha,
         "{{t}}": marca_tarde,
         "{{n}}": marca_noite,
