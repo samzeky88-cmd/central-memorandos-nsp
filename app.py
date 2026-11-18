@@ -382,4 +382,126 @@ def renderizar_memorando(
 def carregar_planilha(arquivo):
     if arquivo.name.endswith(".csv"):
         return pd.read_csv(arquivo)
-    return pd
+    return pd.read_excel(arquivo)
+
+arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações (.xlsx ou .csv)", type=["xlsx", "csv"])
+
+if arquivo_planilha is not None:
+    df = carregar_planilha(arquivo_planilha)
+
+    fuso_brasilia = timezone(timedelta(hours=-3))
+    data_extenso_envio = obter_data_por_extenso(datetime.now(fuso_brasilia))
+    num_colunas = len(df.columns)
+
+    registros_validos = []
+    qtd_pendentes = 0
+    qtd_analise = 0
+    qtd_enviados = 0
+    qtd_tratativa = 0
+    qtd_retificar = 0
+    qtd_nao_enviar = 0
+
+    for index, linha in df.iterrows():
+        status, dados, qtd = processar_linha(index, linha, num_colunas, data_extenso_envio)
+        if dados:
+            registros_validos.append(dados)
+            if status == "ENVIADO":
+                qtd_enviados += qtd
+            elif status == "ANALISE":
+                qtd_analise += qtd
+            elif status == "TRATATIVA":
+                qtd_tratativa += qtd
+            elif status == "RETIFICAR":
+                qtd_retificar += qtd
+            elif status == "NAO_ENVIAR":
+                qtd_nao_enviar += qtd
+            else:
+                qtd_pendentes += qtd
+
+    st.info(
+        f"📊 **Resumo da Planilha:** "
+        f"🔵 **{qtd_pendentes}** Pendentes | "
+        f"🟡 **{qtd_analise}** Em Análise | "
+        f"🟢 **{qtd_enviados}** Já Enviados | "
+        f"🟠 **{qtd_tratativa}** Em Tratativa | "
+        f"🔴 **{qtd_retificar}** Retificar | "
+        f"⚫ **{qtd_nao_enviar}** Não Enviar"
+    )
+
+    col_busca, col_status, col_ordem = st.columns([2, 1.5, 1.2])
+    with col_busca:
+        termo_pesquisa = st.text_input(
+            "🔍 Pesquisar por Nº da Notificação ou Nº do Memorando:",
+            placeholder="Ex: 896 ou 1192"
+        ).strip().upper()
+    with col_status:
+        filtro_status = st.selectbox(
+            "📌 Filtrar por Status:",
+            [
+                "Todos",
+                "Somente Pendentes",
+                "Somente Em Análise",
+                "Somente Em Tratativa",
+                "Somente Retificar",
+                "Somente Não Enviar",
+                "Já Enviados"
+            ]
+        )
+    with col_ordem:
+        ordem_exibicao = st.selectbox(
+            "🔢 Ordem das Notificações:",
+            ["Maior para o Menor (1535 → 886)", "Menor para o Maior (886 → 1535)"]
+        )
+
+    reverso = (ordem_exibicao == "Maior para o Menor (1535 → 886)")
+    registros_validos.sort(key=lambda item: (item["ordem_num"], item["index"]), reverse=reverso)
+
+    encontrados = 0
+    for dados in registros_validos:
+        status_atual = dados["status_envio"]
+        
+        if filtro_status == "Somente Pendentes" and status_atual != "PENDENTE":
+            continue
+        if filtro_status == "Somente Em Análise" and status_atual != "ANALISE":
+            continue
+        if filtro_status == "Somente Em Tratativa" and status_atual != "TRATATIVA":
+            continue
+        if filtro_status == "Somente Retificar" and status_atual != "RETIFICAR":
+            continue
+        if filtro_status == "Somente Não Enviar" and status_atual != "NAO_ENVIAR":
+            continue
+        if filtro_status == "Já Enviados" and status_atual != "ENVIADO":
+            continue
+
+        for memo_idx, memo in enumerate(dados["lista_memos"]):
+            num_notif_str = str(dados["num_notif"]).upper()
+            num_memo_str = str(memo["numero_memo"]).upper()
+
+            if termo_pesquisa:
+                if termo_pesquisa not in num_notif_str and termo_pesquisa not in num_memo_str:
+                    continue
+
+            encontrados += 1
+            renderizar_memorando(
+                index=dados["index"],
+                memo_idx=memo_idx,
+                memo=memo,
+                linha=dados["linha"],
+                num_notif=dados["num_notif"],
+                data_extenso_envio=dados["data_extenso_envio"],
+                dt_ocorr=dados["dt_ocorr"],
+                dt_notif=dados["dt_notif"],
+                onde_ocorreu=dados["onde_ocorreu"],
+                tipo_incidente=dados["tipo_incidente"],
+                classificacao_incidente=dados["classificacao_incidente"],
+                descricao_notificacao=dados["descricao_notificacao"],
+                nome_do_paciente=dados["nome_do_paciente"],
+                leito_paciente=dados["leito_paciente"],
+                setor_notificante_bruto=dados["setor_notificante_bruto"],
+                sugestao_nsp=dados["sugestao_nsp"],
+                turno_planilha=dados["turno_planilha"],
+                status_envio=dados["status_envio"]
+            )
+
+    if encontrados == 0:
+        st.warning("Nenhum memorando encontrado com esse filtro.")
