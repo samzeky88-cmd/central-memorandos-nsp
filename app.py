@@ -19,71 +19,76 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-def substituir_texto_protegendo_logos(doc, dicionario_tags):
-    titulos_negrito = (
-        "MEMO:", "DE:", "PARA:", "ASSUNTO:",
-        "DATA DA OCORRÊNCIA:", "DATA DA NOTIFICAÇÃO:",
-        "TURNO QUE OCORREU INCIDENTE:", "ONDE OCORREU INCIDENTE:",
-        "TIPO DE INCIDENTE:", "CLASSIFICAÇÃO DO INCIDENTE:",
-        "DESCRIÇÃO DA NOTIFICAÇÃO:", "PACIENTE:", "LEITO:",
-        "SETOR NOTIFICANTE:", "SUGESTÃO:"
-    )
+# ============================================================
+# 🆕 FUNÇÃO INTELIGENTE DE MONTAGEM DO DESTINATÁRIO
+# ============================================================
+def montar_destinatario(gestor_col, setor_col):
+    def tratar_texto(t):
+        if not t or str(t).strip() == "":
+            return ""
+        return str(t).strip().upper()
+    
+    g = tratar_texto(gestor_col)
+    s = tratar_texto(setor_col)
+    
+    if not g:
+        return s if s else "GESTOR RESPONSÁVEL"
+    if not s:
+        return g
+    
+    if g == s or s in g:
+        return g
+    
+    abreviaturas = {"SDM": "DA", "NIR": "DO", "SADT": "DO", "SAET": "DO"}
+    if s in abreviaturas:
+        preposicao = abreviaturas[s]
+        if f" {preposicao} " not in g and not g.endswith(f" {preposicao[:-1]}"):
+            return f"{g} {preposicao} {s}"
+        return f"{g} {s}"
+    
+    palavras_g = set(g.replace(" DE ", " ").replace(" DA ", " ").replace(" DO ", " ").split())
+    palavras_s = s.split()
+    if palavras_s[0] in palavras_g:
+        s_limpo = " ".join(palavras_s[1:]).strip()
+        if s_limpo:
+            return f"{g} - {s_limpo}"
+        return g
+    
+    return f"{g} - {s}"
 
-    def processar_paragrafo(paragrafo):
-        texto_atual = paragrafo.text
-        if not any(tag in texto_atual for tag in dicionario_tags):
-            return
+# ============================================================
+# ✅ FUNÇÃO CORRIGIDA: Preserva N/A
+# ============================================================
+def limpar_valor(valor):
+    """
+    Limpa o valor mas PRESERVA N/A explicitamente
+    - Se for vazio/nan → retorna "" (vazio)
+    - Se for N/A (qualquer capitalização) → retorna "N/A"
+    - Caso contrário → retorna o texto limpo
+    """
+    if pd.isna(valor):
+        return ""
+    texto = str(valor).strip()
+    if texto.lower() == "n/a":
+        return "N/A"
+    if texto == "":
+        return ""
+    return texto
 
-        nome_fonte = None
-        tamanho_fonte = None
-        for r in paragrafo.runs:
-            if r.font.name:
-                nome_fonte = r.font.name
-            if r.font.size:
-                tamanho_fonte = r.font.size
-            if nome_fonte and tamanho_fonte:
-                break
-
-        for tag, valor in dicionario_tags.items():
-            if tag in texto_atual:
-                texto_atual = texto_atual.replace(tag, str(valor))
-
-        for run in paragrafo.runs:
-            if not run._element.xpath('.//w:drawing | .//w:pict'):
-                run.text = ""
-
-        def aplicar_estilo(run, negrito):
-            run.bold = negrito
-            if nome_fonte:
-                run.font.name = nome_fonte
-            if tamanho_fonte:
-                run.font.size = tamanho_fonte
-
-        texto_limpo = texto_atual.lstrip("• \t")
-        if ":" in texto_atual and any(texto_limpo.startswith(t) for t in titulos_negrito):
-            indice_dois_pontos = texto_atual.index(":")
-            parte_titulo = texto_atual[:indice_dois_pontos + 1]
-            parte_valor = texto_atual[indice_dois_pontos + 1:]
-
-            run_titulo = paragrafo.add_run(parte_titulo)
-            aplicar_estilo(run_titulo, True)
-
-            run_valor = paragrafo.add_run(parte_valor)
-            aplicar_estilo(run_valor, False)
-        else:
-            run_geral = paragrafo.add_run(texto_atual)
-            aplicar_estilo(run_geral, False)
-
+def substituir_texto_protegido(doc, substituicoes):
     for paragrafo in doc.paragraphs:
-        processar_paragrafo(paragrafo)
-
+        for chave, valor in substituicoes.items():
+            if chave in paragrafo.text:
+                paragrafo.text = paragrafo.text.replace(chave, valor)
     for tabela in doc.tables:
         for linha in tabela.rows:
             for celula in linha.cells:
                 for paragrafo in celula.paragraphs:
-                    processar_paragrafo(paragrafo)
+                    for chave, valor in substituicoes.items():
+                        if chave in paragrafo.text:
+                            paragrafo.text = paragrafo.text.replace(chave, valor)
 
-def converter_docx_para_pdf_bytes(docx_bytes):
+def converter_docx_para_pdf(docx_bytes):
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             caminho_docx = os.path.join(tmpdir, "temp.docx")
@@ -91,10 +96,8 @@ def converter_docx_para_pdf_bytes(docx_bytes):
             with open(caminho_docx, "wb") as f:
                 f.write(docx_bytes)
             subprocess.run(
-                ["libreoffice", "--headless", "--convert-to", "pdf", caminho_docx, "--outdir", tmpdir],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                ["libreoffice", "--headless", "--convert-to", "pdf", "--outdir", tmpdir, caminho_docx],
+                check=True, capture_output=True
             )
             if os.path.exists(caminho_pdf):
                 with open(caminho_pdf, "rb") as f:
@@ -109,25 +112,7 @@ def formatar_data_br(valor):
             return ""
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except Exception:
-        return str(valor).strip()
-
-def limpar_numero_float(valor):
-    if pd.isna(valor) or str(valor).strip().lower() == "nan":
-        return ""
-    try:
-        if isinstance(valor, float) and valor.is_integer():
-            return str(int(valor))
-        v_str = str(valor).strip()
-        if v_str.endswith(".0"):
-            return v_str[:-2]
-        return v_str
-    except Exception:
-        return str(valor)
-
-def tratar_str_limpa(valor):
-    if pd.isna(valor) or str(valor).strip().lower() in ("nan", "none", ""):
-        return ""
-    return str(valor).strip()
+        return limpar_valor(valor)
 
 def obter_data_por_extenso(dt):
     meses = {
@@ -138,7 +123,7 @@ def obter_data_por_extenso(dt):
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
 def extrair_memorandos_da_linha(linha, num_colunas):
-    lista_memos = []
+    lista = []
     campos = [
         (15, 16, 17, 13, 14),
         (20, 21, 22, 18, 19),
@@ -146,238 +131,156 @@ def extrair_memorandos_da_linha(linha, num_colunas):
         (30, 31, 32, 28, 29),
         (35, 36, 37, 33, 34),
     ]
-    for idx_memo, idx_resp, idx_email, idx_gestor, idx_setor in campos:
-        if num_colunas > idx_memo:
-            num_memo = limpar_numero_float(linha.iat[idx_memo])
-            if num_memo and "Nº MEMO" not in num_memo.upper() and num_memo not in ("", "0", "0.0", "-"):
-                resposta = tratar_str_limpa(linha.iat[idx_resp]) if num_colunas > idx_resp else ""
-                email = tratar_str_limpa(linha.iat[idx_email]) if num_colunas > idx_email else ""
-                gestor = tratar_str_limpa(linha.iat[idx_gestor]) if num_colunas > idx_gestor else ""
-                setor_notif = tratar_str_limpa(linha.iat[idx_setor]) if num_colunas > idx_setor else ""
-                lista_memos.append({
-                    "numero_memo": num_memo,
-                    "resposta": resposta,
-                    "email": email,
-                    "gestor": gestor,
-                    "setor_notificado": setor_notif
+    for col_memo, col_email, col_resposta, col_gestor, col_setor in campos:
+        if num_colunas > col_memo:
+            numero_memo = limpar_valor(linha.iloc[col_memo])
+            if numero_memo and numero_memo not in ("", "0", "-"):
+                lista.append({
+                    "numero_memo": numero_memo,
+                    "email": limpar_valor(linha.iloc[col_email]),
+                    "resposta": limpar_valor(linha.iloc[col_resposta]),
+                    "gestor": limpar_valor(linha.iloc[col_gestor]),
+                    "setor_notificado": limpar_valor(linha.iloc[col_setor])
                 })
-    return lista_memos
+    return lista
 
-def extrair_valor_numerico_notif(num_notif_str):
-    digitos = "".join(ch for ch in str(num_notif_str) if ch.isdigit())
-    return int(digitos) if digitos else -1
+def chave_numerica(valor):
+    digitos = "".join(c for c in str(valor) if c.isdigit())
+    return int(digitos) if digitos else 0
 
-def processar_linha(index, linha, num_colunas, data_extenso_envio):
-    def pegar_col(pos, padrao=""):
-        return linha.iat[pos] if num_colunas > pos else padrao
-
-    num_notif_bruto = limpar_numero_float(pegar_col(0, ""))
-    if num_notif_bruto.upper() in ("STATUS", "Nº", "N°", "0", "") or "NOTIF" in num_notif_bruto.upper():
+def processar_linha(index, linha, num_colunas, data_atual):
+    def col(i):
+        return linha.iloc[i] if num_colunas > i else ""
+    
+    num_notif = limpar_valor(col(0))
+    if not num_notif or num_notif.upper() in ("Nº", "NUMERO", "NÚMERO", ""):
         return None, None, 0
-
-    nome_do_paciente = tratar_str_limpa(pegar_col(9, ""))
-    if nome_do_paciente.upper() in ("PACIENTE", "", "0"):
+    
+    nome_paciente = limpar_valor(col(9))
+    if nome_paciente.upper() in ("PACIENTE", "NOME", ""):
         return None, None, 0
-
-    num_notif = num_notif_bruto
-    status_celula = tratar_str_limpa(pegar_col(1, "")).upper()
-
+    
+    status_celula = limpar_valor(col(1)).upper()
     if "ENVIAD" in status_celula and "NÃO" not in status_celula and "NAO" not in status_celula:
-        status_envio = "ENVIADO"
+        status = "ENVIADO"
     elif "TRATATIVA" in status_celula:
-        status_envio = "TRATATIVA"
+        status = "TRATATIVA"
     elif "RETIFICAR" in status_celula:
-        status_envio = "RETIFICAR"
+        status = "RETIFICAR"
     elif "NÃO ENVIAR" in status_celula or "NAO ENVIAR" in status_celula:
-        status_envio = "NAO_ENVIAR"
+        status = "NAO_ENVIAR"
     elif "ANALIS" in status_celula or "ANÁLIS" in status_celula:
-        status_envio = "ANALISE"
+        status = "ANALISE"
     else:
-        status_envio = "PENDENTE"
-
-    dt_ocorr = formatar_data_br(pegar_col(2, ""))
-    dt_notif = formatar_data_br(pegar_col(3, ""))
-    turno_planilha = str(pegar_col(4, "")).strip().upper()
-    onde_ocorreu = tratar_str_limpa(pegar_col(5, "Não informado"))
-    tipo_incidente = tratar_str_limpa(pegar_col(6, ""))
-    classificacao_incidente = tratar_str_limpa(pegar_col(7, ""))
-    descricao_notificacao = tratar_str_limpa(pegar_col(8, ""))
-    leito_paciente = limpar_numero_float(pegar_col(10, ""))
-    setor_notificante_bruto = tratar_str_limpa(pegar_col(11, ""))
-    sugestao_nsp = tratar_str_limpa(pegar_col(12, ""))
-
-    lista_memos = extrair_memorandos_da_linha(linha, num_colunas)
-    if not lista_memos:
-        return None, None, 0
-
-    dados_linha = {
+        status = "PENDENTE"
+    
+    dados = {
         "index": index,
-        "linha": linha,
         "num_notif": num_notif,
-        "ordem_num": extrair_valor_numerico_notif(num_notif),
-        "data_extenso_envio": data_extenso_envio,
-        "dt_ocorr": dt_ocorr,
-        "dt_notif": dt_notif,
-        "onde_ocorreu": onde_ocorreu,
-        "tipo_incidente": tipo_incidente,
-        "classificacao_incidente": classificacao_incidente,
-        "descricao_notificacao": descricao_notificacao,
-        "nome_do_paciente": nome_do_paciente,
-        "leito_paciente": leito_paciente,
-        "setor_notificante_bruto": setor_notificante_bruto,
-        "sugestao_nsp": sugestao_nsp,
-        "turno_planilha": turno_planilha,
-        "status_envio": status_envio,
-        "lista_memos": lista_memos
+        "status": status,
+        "data_ocorrencia": formatar_data_br(col(2)),
+        "data_notificacao": formatar_data_br(col(3)),
+        "turno": limpar_valor(col(4)),
+        "local": limpar_valor(col(5)),
+        "tipo_incidente": limpar_valor(col(6)),
+        "classificacao": limpar_valor(col(7)),
+        "descricao": limpar_valor(col(8)),
+        "nome_paciente": nome_paciente,
+        "leito": limpar_valor(col(10)),
+        "setor_origem": limpar_valor(col(11)),
+        "sugestao": limpar_valor(col(12)),  # ✅ Agora preserva N/A
+        "memorandos": extrair_memorandos_da_linha(linha, num_colunas)
     }
-    return status_envio, dados_linha, len(lista_memos)
-def renderizar_memorando(
-    index, memo_idx, memo, linha, num_notif, data_extenso_envio, dt_ocorr, dt_notif,
-    onde_ocorreu, tipo_incidente, classificacao_incidente, descricao_notificacao,
-    nome_do_paciente, leito_paciente, setor_notificante_bruto, sugestao_nsp,
-    turno_planilha, status_envio
-):
-    num_memo_cru = memo["numero_memo"]
-    email_destino = memo["email"]
-    gestor_destinatario = memo["gestor"] or "GESTOR DE ENFERMAGEM"
-    setor_notificado_final = memo["setor_notificado"] or onde_ocorreu
-
-    num_memo_limpo = (
-        num_memo_cru.replace("Nº", "")
-        .replace("No", "")
-        .replace("NS", "")
-        .replace("NSP", "")
-        .replace("/", "-")
-        .replace(" ", "")
-        .strip()
+    return status, dados, len(dados["memorandos"])
+def gerar_memorando(dados_principais, dados_memo, data_emissao):
+    modelo_path = "modelo_memorando.docx"
+    if not os.path.exists(modelo_path):
+        modelo_path = "modelo.docx"
+    if not os.path.exists(modelo_path):
+        return None, "Modelo não encontrado"
+    
+    doc = Document(modelo_path)
+    
+    destinatario = montar_destinatario(
+        dados_memo["gestor"],
+        dados_memo["setor_notificado"]
     )
-    nome_base_arquivo = f"NOTIF_N{num_notif}_MEMO_N{num_memo_limpo}"
-
-    marca_manha = "X" if "MANH" in turno_planilha else ""
-    marca_tarde = "X" if "TARD" in turno_planilha else ""
-    marca_noite = "X" if "NOIT" in turno_planilha else ""
-
-    if setor_notificante_bruto == "":
-        setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE"
-
-    dados_memorando = {
-        "{{numero_memorando}}": num_memo_cru,
-        "{{gestor}}": gestor_destinatario,
-        "{{setor}}": setor_notificado_final,
-        "{{notificacao_n}}": num_notif,
-        "{{data_notificacao}}": dt_notif,
-        "{{data_ocorrencia}}": dt_ocorr,
-        "{{localizacao}}": onde_ocorreu,
-        "{{tipo_incidente}}": tipo_incidente,
-        "{{classificacao_incidente}}": classificacao_incidente,
-        "{{descricao_notificacao}}": descricao_notificacao,
-        "{{nome_paciente}}": nome_do_paciente,
-        "{{leito}}": leito_paciente,
-        "{{setor_notificante}}": setor_notificante_bruto,
-        "{{sugestão}}": sugestao_nsp,
-        "{{m}}": marca_manha,
-        "{{t}}": marca_tarde,
-        "{{n}}": marca_noite,
-        "{{data_envio}}": data_extenso_envio
+    
+    # ✅ Garante que se for vazio, não apaga o rótulo no modelo
+    sugestao_final = dados_principais["sugestao"]
+    if not sugestao_final:
+        sugestao_final = "N/A"  # Valor padrão se estiver realmente vazio
+    
+    substituicoes = {
+        "NUMERO_MEMO": dados_memo["numero_memo"],
+        "ANO": str(data_emissao.year),
+        "DESTINATARIO": destinatario,
+        "NUM_NOTIFICACAO": dados_principais["num_notif"],
+        "CIDADE_DATA": f"São Luís, {obter_data_por_extenso(data_emissao)}",
+        "DATA_OCORRENCIA": dados_principais["data_ocorrencia"] or "N/A",
+        "DATA_NOTIFICACAO": dados_principais["data_notificacao"] or "N/A",
+        "MANHA": "( X )" if "MANHÃ" in dados_principais["turno"].upper() else "(   )",
+        "TARDE": "( X )" if "TARDE" in dados_principais["turno"].upper() else "(   )",
+        "NOITE": "( X )" if "NOITE" in dados_principais["turno"].upper() else "(   )",
+        "LOCAL": dados_principais["local"] or "N/A",
+        "TIPO_INCIDENTE": dados_principais["tipo_incidente"] or "N/A",
+        "CLASSIFICACAO": dados_principais["classificacao"] or "N/A",
+        "DESCRICAO": dados_principais["descricao"] or "N/A",
+        "PACIENTE": dados_principais["nome_paciente"],
+        "LEITO": dados_principais["leito"] or "N/A",
+        "SETOR_NOTIFICANTE": dados_principais["setor_origem"] or "N/A",
+        "SUGESTAO": sugestao_final  # ✅ Preserva N/A da planilha
     }
+    
+    substituir_texto_protegido(doc, substituicoes)
+    
+    nome_arquivo = f"NOTIF_N{dados_principais['num_notif']}_MEMO_N{dados_memo['numero_memo']}-{data_emissao.year}.docx"
+    caminho_saida = os.path.join(tempfile.gettempdir(), nome_arquivo)
+    doc.save(caminho_saida)
+    
+    with open(caminho_saida, "rb") as f:
+        conteudo = f.read()
+    
+    os.remove(caminho_saida)
+    return conteudo, nome_arquivo
 
-    fuso_brasilia = timezone(timedelta(hours=-3))
-    hora_atual = datetime.now(fuso_brasilia).hour
-    if hora_atual < 12:
-        saudacao = "Bom Dia Prezados"
-    elif hora_atual < 18:
-        saudacao = "Boa Tarde Prezados"
-    else:
-        saudacao = "Boa Noite Prezados"
-
-    corpo_email = (
-        f"{saudacao},\n\n"
-        f"Segue em Anexo o Memorando {num_memo_cru} para ser analisado e respondido "
-        f"(via e-mail) em até 15 dias após a data presente.\n\n"
-        f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para "
-        f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens "
-        f"via e-mail sem arquivo como resposta.\n\n"
-        f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP:\n"
-        f"• Memorando: {num_memo_cru}\n"
-        f"• Notificação: N° {num_notif}\n"
-        f"• Destinatário: {gestor_destinatario} — {setor_notificado_final}\n\n"
-        f"Atenciosamente,\n"
-        f"Ezequias S. Santos\n"
-        f"Agente Administrativo - NAQH & NSP"
+def exibir_memorando(dados_principais, dados_memo, data_emissao):
+    destinatario = montar_destinatario(
+        dados_memo["gestor"],
+        dados_memo["setor_notificado"]
     )
-
-    badges = {
-        "ENVIADO": "🟢 ENVIADO",
-        "ANALISE": "🟡 EM ANÁLISE",
-        "TRATATIVA": "🟠 EM TRATATIVA",
-        "RETIFICAR": "🔴 RETIFICAR",
-        "NAO_ENVIAR": "⚫ NÃO ENVIAR",
-        "PENDENTE": "🔵 PENDENTE"
-    }
-    badge_status = badges.get(status_envio, "🔵 PENDENTE")
-
-    st.markdown(
-        f"**📄 Notificação: Nº {num_notif} | Memorando: {num_memo_cru}** → "
-        f"**{setor_notificado_final}** | *{gestor_destinatario}* — **{badge_status}**"
-    )
-    if email_destino:
-        st.caption(f"📧 E-mail: {email_destino}")
-
-    col_nome, col_word, col_pdf, col_copiar = st.columns([1.5, 0.8, 0.8, 1.8])
-
-    with col_nome:
-        if status_envio == "ENVIADO":
-            st.markdown(f"~~{nome_do_paciente}~~ 🟢 *(Já Enviado)*")
-        elif status_envio == "ANALISE":
-            st.markdown(f"**🟡 {nome_do_paciente}** *(Em Análise)*")
-        elif status_envio == "TRATATIVA":
-            st.markdown(f"**🟠 {nome_do_paciente}** *(Em Tratativa)*")
-        elif status_envio == "RETIFICAR":
-            st.markdown(f"**🔴 {nome_do_paciente}** *(Retificar)*")
-        elif status_envio == "NAO_ENVIAR":
-            st.markdown(f"~~{nome_do_paciente}~~ ⚫ *(Não Enviar)*")
-        else:
-            st.markdown(f"**🔹 {nome_do_paciente}** *(Pendente)*")
-
-    word_bytes = None
-    caminho_modelo = "modelo_memorando.docx"
-    if os.path.exists(caminho_modelo):
-        doc_word = Document(caminho_modelo)
-        substituir_texto_protegendo_logos(doc_word, dados_memorando)
-        word_io = io.BytesIO()
-        doc_word.save(word_io)
-        word_bytes = word_io.getvalue()
-    else:
-        st.error("Arquivo 'modelo_memorando.docx' não encontrado no servidor.")
-
-    with col_word:
-        if word_bytes:
+    
+    st.markdown(f"---")
+    st.subheader(f"📝 Memorando Nº {dados_memo['numero_memo']} / {data_emissao.year}")
+    st.markdown(f"""
+    - **Para:** {destinatario}
+    - **Notificação:** {dados_principais['num_notif']}
+    - **Paciente:** {dados_principais['nome_paciente']}
+    - **Sugestão:** {dados_principais['sugestao'] or 'N/A'}
+    """)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        docx_bytes, nome_docx = gerar_memorando(dados_principais, dados_memo, data_emissao)
+        if docx_bytes:
             st.download_button(
-                label="📄 WORD",
-                data=word_bytes,
-                file_name=f"{nome_base_arquivo}.docx",
+                label="📄 Baixar DOCX",
+                data=docx_bytes,
+                file_name=nome_docx,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key=f"w_{status_envio}_{index}_{memo_idx}_{num_memo_limpo}"
+                key=f"docx_{dados_principais['index']}_{dados_memo['numero_memo']}"
             )
-
-    with col_pdf:
-        if word_bytes:
-            pdf_bytes = converter_docx_para_pdf_bytes(word_bytes)
-            if pdf_bytes:
-                st.download_button(
-                    label="📕 PDF",
-                    data=pdf_bytes,
-                    file_name=f"{nome_base_arquivo}.pdf",
-                    mime="application/pdf",
-                    key=f"p_{status_envio}_{index}_{memo_idx}_{num_memo_limpo}"
-                )
-            else:
-                st.caption("⚠️ PDF indisponível")
-
-    with col_copiar:
-        st.code(corpo_email, language="text")
-
-    st.markdown("---")
+    with col2:
+        pdf_bytes = converter_docx_para_pdf(docx_bytes) if docx_bytes else None
+        if pdf_bytes:
+            nome_pdf = nome_docx.replace(".docx", ".pdf")
+            st.download_button(
+                label="📕 Baixar PDF",
+                data=pdf_bytes,
+                file_name=nome_pdf,
+                mime="application/pdf",
+                key=f"pdf_{dados_principais['index']}_{dados_memo['numero_memo']}"
+            )
 @st.cache_data
 def carregar_planilha(arquivo):
     if arquivo.name.endswith(".csv"):
@@ -388,120 +291,80 @@ arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações 
 
 if arquivo_planilha is not None:
     df = carregar_planilha(arquivo_planilha)
-
+    
     fuso_brasilia = timezone(timedelta(hours=-3))
-    data_extenso_envio = obter_data_por_extenso(datetime.now(fuso_brasilia))
+    data_emissao_atual = datetime.now(fuso_brasilia)
     num_colunas = len(df.columns)
-
-    registros_validos = []
-    qtd_pendentes = 0
-    qtd_analise = 0
-    qtd_enviados = 0
-    qtd_tratativa = 0
-    qtd_retificar = 0
-    qtd_nao_enviar = 0
-
-    for index, linha in df.iterrows():
-        status, dados, qtd = processar_linha(index, linha, num_colunas, data_extenso_envio)
+    
+    registros = []
+    contadores = {
+        "PENDENTE": 0, "ANALISE": 0, "ENVIADO": 0,
+        "TRATATIVA": 0, "RETIFICAR": 0, "NAO_ENVIAR": 0
+    }
+    
+    for indice, linha in df.iterrows():
+        status, dados, qtd_memos = processar_linha(indice, linha, num_colunas, data_emissao_atual)
         if dados:
-            registros_validos.append(dados)
-            if status == "ENVIADO":
-                qtd_enviados += qtd
-            elif status == "ANALISE":
-                qtd_analise += qtd
-            elif status == "TRATATIVA":
-                qtd_tratativa += qtd
-            elif status == "RETIFICAR":
-                qtd_retificar += qtd
-            elif status == "NAO_ENVIAR":
-                qtd_nao_enviar += qtd
-            else:
-                qtd_pendentes += qtd
-
+            registros.append(dados)
+            contadores[status] += qtd_memos
+    
     st.info(
         f"📊 **Resumo da Planilha:** "
-        f"🔵 **{qtd_pendentes}** Pendentes | "
-        f"🟡 **{qtd_analise}** Em Análise | "
-        f"🟢 **{qtd_enviados}** Já Enviados | "
-        f"🟠 **{qtd_tratativa}** Em Tratativa | "
-        f"🔴 **{qtd_retificar}** Retificar | "
-        f"⚫ **{qtd_nao_enviar}** Não Enviar"
+        f"🔵 **{contadores['PENDENTE']}** Pendentes | "
+        f"🟡 **{contadores['ANALISE']}** Em Análise | "
+        f"🟢 **{contadores['ENVIADO']}** Já Enviados | "
+        f"🟠 **{contadores['TRATATIVA']}** Em Tratativa | "
+        f"🔴 **{contadores['RETIFICAR']}** Retificar | "
+        f"⚫ **{contadores['NAO_ENVIAR']}** Não Enviar"
     )
-
-    col_busca, col_status, col_ordem = st.columns([2, 1.5, 1.2])
-    with col_busca:
-        termo_pesquisa = st.text_input(
-            "🔍 Pesquisar por Nº da Notificação ou Nº do Memorando:",
-            placeholder="Ex: 896 ou 1192"
+    
+    col_pesq, col_status, col_ordem = st.columns([2, 1.5, 1.2])
+    with col_pesq:
+        busca = st.text_input(
+            "🔍 Pesquisar por Nº da Notificação ou Paciente:",
+            placeholder="Ex: 886 ou Antônia Maria"
         ).strip().upper()
     with col_status:
-        filtro_status = st.selectbox(
+        filtro = st.selectbox(
             "📌 Filtrar por Status:",
-            [
-                "Todos",
-                "Somente Pendentes",
-                "Somente Em Análise",
-                "Somente Em Tratativa",
-                "Somente Retificar",
-                "Somente Não Enviar",
-                "Já Enviados"
-            ]
+            ["Todos", "Pendentes", "Em Análise", "Em Tratativa", "Retificar", "Não Enviar", "Já Enviados"]
         )
     with col_ordem:
-        ordem_exibicao = st.selectbox(
-            "🔢 Ordem das Notificações:",
-            ["Maior para o Menor (1535 → 886)", "Menor para o Maior (886 → 1535)"]
+        ordem = st.selectbox(
+            "🔢 Ordem:",
+            ["Menor para o Maior", "Maior para o Menor"]
         )
-
-    reverso = (ordem_exibicao == "Maior para o Menor (1535 → 886)")
-    registros_validos.sort(key=lambda item: (item["ordem_num"], item["index"]), reverse=reverso)
-
-    encontrados = 0
-    for dados in registros_validos:
-        status_atual = dados["status_envio"]
-        
-        if filtro_status == "Somente Pendentes" and status_atual != "PENDENTE":
-            continue
-        if filtro_status == "Somente Em Análise" and status_atual != "ANALISE":
-            continue
-        if filtro_status == "Somente Em Tratativa" and status_atual != "TRATATIVA":
-            continue
-        if filtro_status == "Somente Retificar" and status_atual != "RETIFICAR":
-            continue
-        if filtro_status == "Somente Não Enviar" and status_atual != "NAO_ENVIAR":
-            continue
-        if filtro_status == "Já Enviados" and status_atual != "ENVIADO":
-            continue
-
-        for memo_idx, memo in enumerate(dados["lista_memos"]):
-            num_notif_str = str(dados["num_notif"]).upper()
-            num_memo_str = str(memo["numero_memo"]).upper()
-
-            if termo_pesquisa:
-                if termo_pesquisa not in num_notif_str and termo_pesquisa not in num_memo_str:
-                    continue
-
-            encontrados += 1
-            renderizar_memorando(
-                index=dados["index"],
-                memo_idx=memo_idx,
-                memo=memo,
-                linha=dados["linha"],
-                num_notif=dados["num_notif"],
-                data_extenso_envio=dados["data_extenso_envio"],
-                dt_ocorr=dados["dt_ocorr"],
-                dt_notif=dados["dt_notif"],
-                onde_ocorreu=dados["onde_ocorreu"],
-                tipo_incidente=dados["tipo_incidente"],
-                classificacao_incidente=dados["classificacao_incidente"],
-                descricao_notificacao=dados["descricao_notificacao"],
-                nome_do_paciente=dados["nome_do_paciente"],
-                leito_paciente=dados["leito_paciente"],
-                setor_notificante_bruto=dados["setor_notificante_bruto"],
-                sugestao_nsp=dados["sugestao_nsp"],
-                turno_planilha=dados["turno_planilha"],
-                status_envio=dados["status_envio"]
-            )
-
-    if encontrados == 0:
-        st.warning("Nenhum memorando encontrado com esse filtro.")
+    
+    mapa_filtro = {
+        "Pendentes": "PENDENTE",
+        "Em Análise": "ANALISE",
+        "Em Tratativa": "TRATATIVA",
+        "Retificar": "RETIFICAR",
+        "Não Enviar": "NAO_ENVIAR",
+        "Já Enviados": "ENVIADO"
+    }
+    if filtro != "Todos":
+        registros = [r for r in registros if r["status"] == mapa_filtro[filtro]]
+    
+    if busca:
+        registros = [r for r in registros 
+                     if busca in r["num_notif"] or busca in r["nome_paciente"].upper()]
+    
+    registros.sort(key=lambda r: chave_numerica(r["num_notif"]), reverse=(ordem == "Maior para o Menor"))
+    
+    if not registros:
+        st.warning("Nenhum registro encontrado com os filtros selecionados.")
+    else:
+        for registro in registros:
+            with st.expander(f"📋 Notificação Nº {registro['num_notif']} — {registro['nome_paciente']}"):
+                st.markdown(f"""
+                **📍 Local:** {registro['local'] or 'N/A'} | **🏥 Leito:** {registro['leito'] or 'N/A'}  
+                **⚠️ Tipo:** {registro['tipo_incidente'] or 'N/A'} | **📊 Classificação:** {registro['classificacao'] or 'N/A'}  
+                **📝 Sugestão:** {registro['sugestao'] or 'N/A'}
+                """)
+                
+                if not registro["memorandos"]:
+                    st.warning("Sem memorandos vinculados")
+                else:
+                    for memo in registro["memorandos"]:
+                        exibir_memorando(registro, memo, data_emissao_atual)
