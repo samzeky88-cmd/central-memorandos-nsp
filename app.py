@@ -204,25 +204,26 @@ def gerar_memorando(dados_principais, dados_memo, data_emissao):
     if not sugestao_final:
         sugestao_final = "N/A"
     
+    # ✅ CHAVES EXATAS DO SEU MODELO WORD
     substituicoes = {
-        "NUMERO_MEMO": dados_memo["numero_memo"],
-        "ANO": str(data_emissao.year),
-        "DESTINATARIO": destinatario,
-        "NUM_NOTIFICACAO": dados_principais["num_notif"],
-        "CIDADE_DATA": f"São Luís, {obter_data_por_extenso(data_emissao)}",
-        "DATA_OCORRENCIA": dados_principais["data_ocorrencia"] or "N/A",
-        "DATA_NOTIFICACAO": dados_principais["data_notificacao"] or "N/A",
-        "MANHA": "( X )" if "MANHÃ" in dados_principais["turno"].upper() else "(   )",
-        "TARDE": "( X )" if "TARDE" in dados_principais["turno"].upper() else "(   )",
-        "NOITE": "( X )" if "NOITE" in dados_principais["turno"].upper() else "(   )",
-        "LOCAL": dados_principais["local"] or "N/A",
-        "TIPO_INCIDENTE": dados_principais["tipo_incidente"] or "N/A",
-        "CLASSIFICACAO": dados_principais["classificacao"] or "N/A",
-        "DESCRICAO": dados_principais["descricao"] or "N/A",
-        "PACIENTE": dados_principais["nome_paciente"],
-        "LEITO": dados_principais["leito"] or "N/A",
-        "SETOR_NOTIFICANTE": dados_principais["setor_origem"] or "N/A",
-        "SUGESTAO": sugestao_final
+        "{{numero_memorando}}": dados_memo["numero_memo"],
+        "{{ano}}": str(data_emissao.year),
+        "{{setor}}": destinatario,
+        "{{notificacao_n}}": dados_principais["num_notif"],
+        "{{data_envio}}": obter_data_por_extenso(data_emissao),
+        "{{data_ocorrencia}}": dados_principais["data_ocorrencia"] or "N/A",
+        "{{data_notificacao}}": dados_principais["data_notificacao"] or "N/A",
+        "{{m}}": "( X )" if "MANHÃ" in dados_principais["turno"].upper() else "(   )",
+        "{{t}}": "( X )" if "TARDE" in dados_principais["turno"].upper() else "(   )",
+        "{{n}}": "( X )" if "NOITE" in dados_principais["turno"].upper() else "(   )",
+        "{{localizacao}}": dados_principais["local"] or "N/A",
+        "{{tipo_incidente}}": dados_principais["tipo_incidente"] or "N/A",
+        "{{classificacao_incidente}}": dados_principais["classificacao"] or "N/A",
+        "{{descricao_notificacao}}": dados_principais["descricao"] or "N/A",
+        "{{nome_paciente}}": dados_principais["nome_paciente"] or "N/A",
+        "{{leito}}": dados_principais["leito"] or "N/A",
+        "{{setor_notificante}}": dados_principais["setor_origem"] or "N/A",
+        "{{sugestao}}": sugestao_final
     }
     
     substituir_texto_protegido(doc, substituicoes)
@@ -343,7 +344,7 @@ if arquivo_planilha is not None:
                      if busca in r["num_notif"] or busca in r["nome_paciente"].upper()]
     
     registros.sort(key=lambda r: chave_numerica(r["num_notif"]), reverse=(ordem == "Maior para o Menor"))
-       # ============================================================
+    # ============================================================
     # 📊 ABA: ESTATÍSTICAS E RANKING DE SETORES
     # ============================================================
     st.markdown("---")
@@ -385,33 +386,4 @@ if arquivo_planilha is not None:
         st.subheader("📈 Gráfico — Top 15 Setores Mais Notificados")
         
         top_setores = ranking[:15]
-        nomes = [item[0] for item in top_setores]
-        quantidades = [item[1] for item in top_setores]
-        
-        st.bar_chart(
-            data=pd.DataFrame({"Notificações": quantidades}, index=nomes),
-            use_container_width=True
-        )
-    
-    # ============================================================
-    # 📋 LISTA DE NOTIFICAÇÕES
-    # ============================================================
-    st.markdown("---")
-    st.header("📋 Lista de Notificações")
-    
-    if not registros:
-        st.warning("Nenhum registro encontrado com os filtros selecionados.")
-    else:
-        for registro in registros:
-            with st.expander(f"📋 Notificação Nº {registro['num_notif']} — {registro['nome_paciente']}"):
-                st.markdown(f"""
-                **📍 Local:** {registro['local'] or 'N/A'} | **🏥 Leito:** {registro['leito'] or 'N/A'}  
-                **⚠️ Tipo:** {registro['tipo_incidente'] or 'N/A'} | **📊 Classificação:** {registro['classificacao'] or 'N/A'}  
-                **📝 Sugestão:** {registro['sugestao'] or 'N/A'}
-                """)
-                
-                if not registro["memorandos"]:
-                    st.warning("Sem memorandos vinculados")
-                else:
-                    for memo in registro["memorandos"]:
-                        exibir_memorando(registro, memo, data_emissao_atual)
+        nomes = [item[0] for item in top_setores
