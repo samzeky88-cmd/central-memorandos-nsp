@@ -20,7 +20,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# FUNÇÃO INTELIGENTE DE MONTAGEM DO DESTINATÁRIO
+# 🆕 FUNÇÃO INTELIGENTE DE MONTAGEM DO DESTINATÁRIO
 # ============================================================
 def montar_destinatario(gestor_col, setor_col):
     def tratar_texto(t):
@@ -56,7 +56,16 @@ def montar_destinatario(gestor_col, setor_col):
     
     return f"{g} - {s}"
 
+# ============================================================
+# ✅ FUNÇÃO CORRIGIDA: Preserva N/A
+# ============================================================
 def limpar_valor(valor):
+    """
+    Limpa o valor mas PRESERVA N/A explicitamente
+    - Se for vazio/nan → retorna "" (vazio)
+    - Se for N/A (qualquer capitalização) → retorna "N/A"
+    - Caso contrário → retorna o texto limpo
+    """
     if pd.isna(valor):
         return ""
     texto = str(valor).strip()
@@ -179,19 +188,15 @@ def processar_linha(index, linha, num_colunas, data_atual):
         "nome_paciente": nome_paciente,
         "leito": limpar_valor(col(10)),
         "setor_origem": limpar_valor(col(11)),
-        "sugestao": limpar_valor(col(12)),
+        "sugestao": limpar_valor(col(12)),  # ✅ Agora preserva N/A
         "memorandos": extrair_memorandos_da_linha(linha, num_colunas)
     }
     return status, dados, len(dados["memorandos"])
-
 def gerar_memorando(dados_principais, dados_memo, data_emissao):
     modelo_path = "modelo_memorando.docx"
     if not os.path.exists(modelo_path):
         modelo_path = "modelo.docx"
-    
     if not os.path.exists(modelo_path):
-        st.error("❌ ARQUIVO MODELO NÃO ENCONTRADO!")
-        st.warning("Por favor, verifique se o arquivo 'modelo_memorando.docx' está na pasta do projeto.")
         return None, "Modelo não encontrado"
     
     doc = Document(modelo_path)
@@ -201,40 +206,42 @@ def gerar_memorando(dados_principais, dados_memo, data_emissao):
         dados_memo["setor_notificado"]
     )
     
+    # ✅ Garante que se for vazio, não apaga o rótulo no modelo
     sugestao_final = dados_principais["sugestao"]
     if not sugestao_final:
-        sugestao_final = "N/A"
+        sugestao_final = "N/A"  # Valor padrão se estiver realmente vazio
     
     substituicoes = {
-        "{{numero_memorando}}": dados_memo["numero_memo"],
-        "{{ano}}": str(data_emissao.year),
-        "{{setor}}": destinatario,
-        "{{notificacao_n}}": dados_principais["num_notif"],
-        "{{data_envio}}": obter_data_por_extenso(data_emissao),
-        "{{data_ocorrencia}}": dados_principais["data_ocorrencia"] or "N/A",
-        "{{data_notificacao}}": dados_principais["data_notificacao"] or "N/A",
-        "{{m}}": "( X )" if "MANHÃ" in dados_principais["turno"].upper() else "(   )",
-        "{{t}}": "( X )" if "TARDE" in dados_principais["turno"].upper() else "(   )",
-        "{{n}}": "( X )" if "NOITE" in dados_principais["turno"].upper() else "(   )",
-        "{{localizacao}}": dados_principais["local"] or "N/A",
-        "{{tipo_incidente}}": dados_principais["tipo_incidente"] or "N/A",
-        "{{classificacao_incidente}}": dados_principais["classificacao"] or "N/A",
-        "{{descricao_notificacao}}": dados_principais["descricao"] or "N/A",
-        "{{nome_paciente}}": dados_principais["nome_paciente"] or "N/A",
-        "{{leito}}": dados_principais["leito"] or "N/A",
-        "{{setor_notificante}}": dados_principais["setor_origem"] or "N/A",
-        "{{sugestao}}": sugestao_final
+        "NUMERO_MEMO": dados_memo["numero_memo"],
+        "ANO": str(data_emissao.year),
+        "DESTINATARIO": destinatario,
+        "NUM_NOTIFICACAO": dados_principais["num_notif"],
+        "CIDADE_DATA": f"São Luís, {obter_data_por_extenso(data_emissao)}",
+        "DATA_OCORRENCIA": dados_principais["data_ocorrencia"] or "N/A",
+        "DATA_NOTIFICACAO": dados_principais["data_notificacao"] or "N/A",
+        "MANHA": "( X )" if "MANHÃ" in dados_principais["turno"].upper() else "(   )",
+        "TARDE": "( X )" if "TARDE" in dados_principais["turno"].upper() else "(   )",
+        "NOITE": "( X )" if "NOITE" in dados_principais["turno"].upper() else "(   )",
+        "LOCAL": dados_principais["local"] or "N/A",
+        "TIPO_INCIDENTE": dados_principais["tipo_incidente"] or "N/A",
+        "CLASSIFICACAO": dados_principais["classificacao"] or "N/A",
+        "DESCRICAO": dados_principais["descricao"] or "N/A",
+        "PACIENTE": dados_principais["nome_paciente"],
+        "LEITO": dados_principais["leito"] or "N/A",
+        "SETOR_NOTIFICANTE": dados_principais["setor_origem"] or "N/A",
+        "SUGESTAO": sugestao_final  # ✅ Preserva N/A da planilha
     }
     
     substituir_texto_protegido(doc, substituicoes)
     
     nome_arquivo = f"NOTIF_N{dados_principais['num_notif']}_MEMO_N{dados_memo['numero_memo']}-{data_emissao.year}.docx"
+    caminho_saida = os.path.join(tempfile.gettempdir(), nome_arquivo)
+    doc.save(caminho_saida)
     
-    doc_io = io.BytesIO()
-    doc.save(doc_io)
-    doc_io.seek(0)
-    conteudo = doc_io.getvalue()
+    with open(caminho_saida, "rb") as f:
+        conteudo = f.read()
     
+    os.remove(caminho_saida)
     return conteudo, nome_arquivo
 
 def exibir_memorando(dados_principais, dados_memo, data_emissao):
@@ -274,16 +281,12 @@ def exibir_memorando(dados_principais, dados_memo, data_emissao):
                 mime="application/pdf",
                 key=f"pdf_{dados_principais['index']}_{dados_memo['numero_memo']}"
             )
-
 @st.cache_data
 def carregar_planilha(arquivo):
     if arquivo.name.endswith(".csv"):
         return pd.read_csv(arquivo)
     return pd.read_excel(arquivo)
 
-# ============================================================
-# 📂 UPLOAD E PROCESSAMENTO PRINCIPAL
-# ============================================================
 arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações (.xlsx ou .csv)", type=["xlsx", "csv"])
 
 if arquivo_planilha is not None:
@@ -349,47 +352,19 @@ if arquivo_planilha is not None:
     
     registros.sort(key=lambda r: chave_numerica(r["num_notif"]), reverse=(ordem == "Maior para o Menor"))
     
-    # ============================================================
-    # 📊 ABA: ESTATÍSTICAS E RANKING DE SETORES
-    # ============================================================
-    st.markdown("---")
-    st.header("📊 Estatísticas dos Setores Mais Notificados")
-    
-    contagem_setores = {}
-    for registro in registros:
-        setor = registro["local"] or "Não informado"
-        if setor in contagem_setores:
-            contagem_setores[setor] += 1
-        else:
-            contagem_setores[setor] = 1
-    
-    ranking = sorted(contagem_setores.items(), key=lambda x: x[1], reverse=True)
-    
-    aba_ranking, aba_grafico = st.tabs(["🏆 Ranking", "📈 Gráfico"])
-    
-    with aba_ranking:
-        st.subheader("🏆 Ranking dos Setores com Mais Notificações")
-        st.markdown("Ordenado por quantidade de incidentes registrados:")
-        
-        tabela_ranking = []
-        for posicao, (setor, quantidade) in enumerate(ranking, 1):
-            medalha = "🥇" if posicao == 1 else "🥈" if posicao == 2 else "🥉" if posicao == 3 else f"{posicao}º"
-            porcentagem = (quantidade / len(registros) * 100) if registros else 0
-            tabela_ranking.append({
-                "Posição": medalha,
-                "Setor": setor,
-                "Notificações": quantidade,
-                "% do Total": f"{porcentagem:.1f}%"
-            })
-        
-        df_ranking = pd.DataFrame(tabela_ranking)
-        st.dataframe(df_ranking, use_container_width=True, hide_index=True)
-        
-        st.info(f"📋 Total de notificações analisadas: **{len(registros)}** em **{len(ranking)}** setores distintos")
-    
-    with aba_grafico:
-        st.subheader("📈 Gráfico — Top 15 Setores Mais Notificados")
-        
-        top_setores = ranking[:15]
-        nomes = [item[0] for item in top_setores]
-        quantidades
+    if not registros:
+        st.warning("Nenhum registro encontrado com os filtros selecionados.")
+    else:
+        for registro in registros:
+            with st.expander(f"📋 Notificação Nº {registro['num_notif']} — {registro['nome_paciente']}"):
+                st.markdown(f"""
+                **📍 Local:** {registro['local'] or 'N/A'} | **🏥 Leito:** {registro['leito'] or 'N/A'}  
+                **⚠️ Tipo:** {registro['tipo_incidente'] or 'N/A'} | **📊 Classificação:** {registro['classificacao'] or 'N/A'}  
+                **📝 Sugestão:** {registro['sugestao'] or 'N/A'}
+                """)
+                
+                if not registro["memorandos"]:
+                    st.warning("Sem memorandos vinculados")
+                else:
+                    for memo in registro["memorandos"]:
+                        exibir_memorando(registro, memo, data_emissao_atual)
