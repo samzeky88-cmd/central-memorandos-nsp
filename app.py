@@ -344,7 +344,7 @@ if arquivo_planilha is not None:
                      if busca in r["num_notif"] or busca in r["nome_paciente"].upper()]
     
     registros.sort(key=lambda r: chave_numerica(r["num_notif"]), reverse=(ordem == "Maior para o Menor"))
-    # ============================================================
+       # ============================================================
     # 📊 ABA: ESTATÍSTICAS E RANKING DE SETORES
     # ============================================================
     st.markdown("---")
@@ -386,4 +386,41 @@ if arquivo_planilha is not None:
         st.subheader("📈 Gráfico — Top 15 Setores Mais Notificados")
         
         top_setores = ranking[:15]
-        nomes = [item[0] for item in top_setores
+        nomes = [item[0] for item in top_setores]
+        quantidades = [item[1] for item in top_setores]
+        
+        st.bar_chart(
+            data=pd.DataFrame({"Notificações": quantidades}, index=nomes),
+            use_container_width=True
+        )
+    
+    # ============================================================
+    # 📋 LISTA DE NOTIFICAÇÕES — Blocos de 4 em 4
+    # ============================================================
+    st.markdown("---")
+    st.header("📋 Lista de Notificações")
+    
+    if not registros:
+        st.warning("Nenhum registro encontrado com os filtros selecionados.")
+    else:
+        # Exibe em blocos de 4 notificações para melhor visualização
+        for bloco_inicio in range(0, len(registros), 4):
+            bloco = registros[bloco_inicio : bloco_inicio + 4]
+            st.subheader(f"📦 Notificações {bloco_inicio + 1} a {min(bloco_inicio + 4, len(registros))}")
+            st.divider()
+            
+            for registro in bloco:
+                with st.expander(f"📋 Notificação Nº {registro['num_notif']} — {registro['nome_paciente']}"):
+                    st.markdown(f"""
+                    **📍 Local:** {registro['local'] or 'N/A'} | **🏥 Leito:** {registro['leito'] or 'N/A'}  
+                    **⚠️ Tipo:** {registro['tipo_incidente'] or 'N/A'} | **📊 Classificação:** {registro['classificacao'] or 'N/A'}  
+                    **📝 Sugestão:** {registro['sugestao'] or 'N/A'}
+                    """)
+                    
+                    if not registro["memorandos"]:
+                        st.warning("Sem memorandos vinculados")
+                    else:
+                        for memo in registro["memorandos"]:
+                            exibir_memorando(registro, memo, data_emissao_atual)
+            
+            st.markdown("---")
