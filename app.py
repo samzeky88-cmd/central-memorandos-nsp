@@ -135,7 +135,6 @@ def extrair_memorandos_da_linha(linha, num_colunas):
 def chave_numerica(valor):
     digitos = "".join(c for c in str(valor) if c.isdigit())
     return int(digitos) if digitos else 0
-
 def processar_linha(index, linha, num_colunas, data_atual):
     def col(i):
         return linha.iloc[i] if num_colunas > i else ""
@@ -268,3 +267,100 @@ def exibir_memorando(dados_principais, dados_memo, data_emissao):
             st.download_button(
                 label="📕 Baixar PDF",
                 data=pdf_bytes,
+                file_name=nome_pdf,
+                mime="application/pdf",
+                key=f"pdf_{dados_principais['index']}_{dados_memo['numero_memo']}"
+            )
+
+@st.cache_data
+def carregar_planilha(arquivo):
+    if arquivo.name.endswith(".csv"):
+        return pd.read_csv(arquivo, keep_default_na=False)
+    return pd.read_excel(arquivo, keep_default_na=False)
+
+arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações (.xlsx ou .csv)", type=["xlsx", "csv"])
+
+if arquivo_planilha is not None:
+    df = carregar_planilha(arquivo_planilha)
+    
+    fuso_brasilia = timezone(timedelta(hours=-3))
+    data_emissao_atual = datetime.now(fuso_brasilia)
+    num_colunas = len(df.columns)
+    
+    registros = []
+    contadores = {
+        "PENDENTE": 0, "ANALISE": 0, "ENVIADO": 0,
+        "TRATATIVA": 0, "RETIFICAR": 0, "NAO_ENVIAR": 0
+    }
+    
+    for indice, linha in df.iterrows():
+        status, dados, qtd_memos = processar_linha(indice, linha, num_colunas, data_emissao_atual)
+        if dados:
+            registros.append(dados)
+            contadores[status] += qtd_memos
+            
+    st.info(
+        f"📊 **Resumo da Planilha:** "
+        f"🔵 **{contadores['PENDENTE']}** Pendentes | "
+        f"🟡 **{contadores['ANALISE']}** Em Análise | "
+        f"🟢 **{contadores['ENVIADO']}** Já Enviados | "
+        f"🟠 **{contadores['TRATATIVA']}** Em Tratativa | "
+        f"🔴 **{contadores['RETIFICAR']}** Retificar | "
+        f"⚫ **{contadores['NAO_ENVIAR']}** Não Enviar"
+    )
+    
+    col_pesq, col_status, col_ordem = st.columns([2, 1.5, 1.2])
+    with col_pesq:
+        busca = st.text_input(
+            "🔍 Pesquisar por Nº da Notificação ou Paciente:",
+            placeholder="Ex: 886 ou Antônia Maria"
+        ).strip().upper()
+    with col_status:
+        filtro = st.selectbox(
+            "📌 Filtrar por Status:",
+            ["Todos", "Pendentes", "Em Análise", "Em Tratativa", "Retificar", "Não Enviar", "Já Enviados"]
+        )
+    with col_ordem:
+        ordem = st.selectbox(
+            "🔢 Ordem:",
+            ["Menor para o Maior", "Maior para o Menor"]
+        )
+        
+    mapa_filtro = {
+        "Pendentes": "PENDENTE",
+        "Em Análise": "ANALISE",
+        "Em Tratativa": "TRATATIVA",
+        "Retificar": "RETIFICAR",
+        "Não Enviar": "NAO_ENVIAR",
+        "Já Enviados": "ENVIADO"
+    }
+    
+    if filtro != "Todos":
+        registros = [r for r in registros if r["status"] == mapa_filtro[filtro]]
+        
+    if busca:
+        registros = [
+            r for r in registros
+            if busca in r["num_notif"].upper() or busca in r["nome_paciente"].upper()
+        ]
+        
+    registros.sort(key=lambda r: chave_numerica(r["num_notif"]), reverse=(ordem == "Maior para o Menor"))
+    
+    if not registros:
+        st.warning("Nenhum registro encontrado com os filtros selecionados.")
+    else:
+        for registro in registros:
+            with st.expander(f"📋 Notificação Nº {registro['num_notif']} — {registro['nome_paciente']}"):
+                st.markdown(f"""
+**📍 Local:** {registro['local'] or 'N/A'} | **🏥 Leito:** {registro['leito'] or 'N/A'}
+
+**⚠️ Tipo:** {registro['tipo_incidente'] or 'N/A'} | **📊 Classificação:** {registro['classificacao'] or 'N/A'}
+
+**📝 Sugestão:** {registro['sugestao'] or 'N/A'}
+                """)
+                
+                if not registro["memorandos"]:
+                    st.warning("Sem memorandos vinculados")
+                else:
+                    for memo in registro["memorandos"]:
+                        exibir_memorando(registro, memo, data_emissao_atual)
