@@ -48,7 +48,7 @@ def montar_destinatario(gestor_col, setor_col):
     
     palavras_g = set(g.replace(" DE ", " ").replace(" DA ", " ").replace(" DO ", " ").split())
     palavras_s = s.split()
-    if palavras_s[0] in palavras_g:
+    if palavras_s and palavras_s[0] in palavras_g:
         s_limpo = " ".join(palavras_s[1:]).strip()
         if s_limpo:
             return f"{g} - {s_limpo}"
@@ -71,7 +71,7 @@ def limpar_valor(valor):
     texto = str(valor).strip()
     if texto.lower() == "n/a":
         return "N/A"
-    if texto == "":
+    if texto == "" or texto.lower() == "nan":
         return ""
     return texto
 
@@ -110,7 +110,7 @@ def formatar_data_br(valor):
     try:
         if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
             return ""
-        return pd.to_datetime(valor).strftime("%d/%m/%Y")
+        return pd.to_datetime(valor, dayfirst=True).strftime("%d/%m/%Y")
     except Exception:
         return limpar_valor(valor)
 
@@ -192,6 +192,7 @@ def processar_linha(index, linha, num_colunas, data_atual):
         "memorandos": extrair_memorandos_da_linha(linha, num_colunas)
     }
     return status, dados, len(dados["memorandos"])
+
 def gerar_memorando(dados_principais, dados_memo, data_emissao):
     modelo_path = "modelo_memorando.docx"
     if not os.path.exists(modelo_path):
@@ -234,15 +235,17 @@ def gerar_memorando(dados_principais, dados_memo, data_emissao):
     
     substituir_texto_protegido(doc, substituicoes)
     
-    nome_arquivo = f"NOTIF_N{dados_principais['num_notif']}_MEMO_N{dados_memo['numero_memo']}-{data_emissao.year}.docx"
-    caminho_saida = os.path.join(tempfile.gettempdir(), nome_arquivo)
-    doc.save(caminho_saida)
+    # ✅ Remove barras (/ ou \) do nome do arquivo para evitar FileNotFoundError
+    notif_limpo = str(dados_principais['num_notif']).replace("/", "-").replace("\\", "-")
+    memo_limpo = str(dados_memo['numero_memo']).replace("/", "-").replace("\\", "-")
+    nome_arquivo = f"NOTIF_N{notif_limpo}_MEMO_N{memo_limpo}-{data_emissao.year}.docx"
     
-    with open(caminho_saida, "rb") as f:
-        conteudo = f.read()
+    # ✅ Salva direto em memória usando BytesIO
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
     
-    os.remove(caminho_saida)
-    return conteudo, nome_arquivo
+    return buffer.getvalue(), nome_arquivo
 
 def exibir_memorando(dados_principais, dados_memo, data_emissao):
     destinatario = montar_destinatario(
@@ -250,121 +253,12 @@ def exibir_memorando(dados_principais, dados_memo, data_emissao):
         dados_memo["setor_notificado"]
     )
     
-    st.markdown(f"---")
+    st.markdown("---")
     st.subheader(f"📝 Memorando Nº {dados_memo['numero_memo']} / {data_emissao.year}")
     st.markdown(f"""
-    - **Para:** {destinatario}
-    - **Notificação:** {dados_principais['num_notif']}
-    - **Paciente:** {dados_principais['nome_paciente']}
-    - **Sugestão:** {dados_principais['sugestao'] or 'N/A'}
+- **Para:** {destinatario}
+- **Notificação:** {dados_principais['num_notif']}
+- **Paciente:** {dados_principais['nome_paciente']}
+- **Sugestão:** {dados_principais['sugestao'] or 'N/A'}
     """)
     
-    col1, col2 = st.columns(2)
-    with col1:
-        docx_bytes, nome_docx = gerar_memorando(dados_principais, dados_memo, data_emissao)
-        if docx_bytes:
-            st.download_button(
-                label="📄 Baixar DOCX",
-                data=docx_bytes,
-                file_name=nome_docx,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key=f"docx_{dados_principais['index']}_{dados_memo['numero_memo']}"
-            )
-    with col2:
-        pdf_bytes = converter_docx_para_pdf(docx_bytes) if docx_bytes else None
-        if pdf_bytes:
-            nome_pdf = nome_docx.replace(".docx", ".pdf")
-            st.download_button(
-                label="📕 Baixar PDF",
-                data=pdf_bytes,
-                file_name=nome_pdf,
-                mime="application/pdf",
-                key=f"pdf_{dados_principais['index']}_{dados_memo['numero_memo']}"
-            )
-@st.cache_data
-def carregar_planilha(arquivo):
-    if arquivo.name.endswith(".csv"):
-        return pd.read_csv(arquivo)
-    return pd.read_excel(arquivo)
-
-arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações (.xlsx ou .csv)", type=["xlsx", "csv"])
-
-if arquivo_planilha is not None:
-    df = carregar_planilha(arquivo_planilha)
-    
-    fuso_brasilia = timezone(timedelta(hours=-3))
-    data_emissao_atual = datetime.now(fuso_brasilia)
-    num_colunas = len(df.columns)
-    
-    registros = []
-    contadores = {
-        "PENDENTE": 0, "ANALISE": 0, "ENVIADO": 0,
-        "TRATATIVA": 0, "RETIFICAR": 0, "NAO_ENVIAR": 0
-    }
-    
-    for indice, linha in df.iterrows():
-        status, dados, qtd_memos = processar_linha(indice, linha, num_colunas, data_emissao_atual)
-        if dados:
-            registros.append(dados)
-            contadores[status] += qtd_memos
-    
-    st.info(
-        f"📊 **Resumo da Planilha:** "
-        f"🔵 **{contadores['PENDENTE']}** Pendentes | "
-        f"🟡 **{contadores['ANALISE']}** Em Análise | "
-        f"🟢 **{contadores['ENVIADO']}** Já Enviados | "
-        f"🟠 **{contadores['TRATATIVA']}** Em Tratativa | "
-        f"🔴 **{contadores['RETIFICAR']}** Retificar | "
-        f"⚫ **{contadores['NAO_ENVIAR']}** Não Enviar"
-    )
-    
-    col_pesq, col_status, col_ordem = st.columns([2, 1.5, 1.2])
-    with col_pesq:
-        busca = st.text_input(
-            "🔍 Pesquisar por Nº da Notificação ou Paciente:",
-            placeholder="Ex: 886 ou Antônia Maria"
-        ).strip().upper()
-    with col_status:
-        filtro = st.selectbox(
-            "📌 Filtrar por Status:",
-            ["Todos", "Pendentes", "Em Análise", "Em Tratativa", "Retificar", "Não Enviar", "Já Enviados"]
-        )
-    with col_ordem:
-        ordem = st.selectbox(
-            "🔢 Ordem:",
-            ["Menor para o Maior", "Maior para o Menor"]
-        )
-    
-    mapa_filtro = {
-        "Pendentes": "PENDENTE",
-        "Em Análise": "ANALISE",
-        "Em Tratativa": "TRATATIVA",
-        "Retificar": "RETIFICAR",
-        "Não Enviar": "NAO_ENVIAR",
-        "Já Enviados": "ENVIADO"
-    }
-    if filtro != "Todos":
-        registros = [r for r in registros if r["status"] == mapa_filtro[filtro]]
-    
-    if busca:
-        registros = [r for r in registros 
-                     if busca in r["num_notif"] or busca in r["nome_paciente"].upper()]
-    
-    registros.sort(key=lambda r: chave_numerica(r["num_notif"]), reverse=(ordem == "Maior para o Menor"))
-    
-    if not registros:
-        st.warning("Nenhum registro encontrado com os filtros selecionados.")
-    else:
-        for registro in registros:
-            with st.expander(f"📋 Notificação Nº {registro['num_notif']} — {registro['nome_paciente']}"):
-                st.markdown(f"""
-                **📍 Local:** {registro['local'] or 'N/A'} | **🏥 Leito:** {registro['leito'] or 'N/A'}  
-                **⚠️ Tipo:** {registro['tipo_incidente'] or 'N/A'} | **📊 Classificação:** {registro['classificacao'] or 'N/A'}  
-                **📝 Sugestão:** {registro['sugestao'] or 'N/A'}
-                """)
-                
-                if not registro["memorandos"]:
-                    st.warning("Sem memorandos vinculados")
-                else:
-                    for memo in registro["memorandos"]:
-                        exibir_memorando(registro, memo, data_emissao_atual)
