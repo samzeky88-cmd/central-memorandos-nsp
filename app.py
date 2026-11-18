@@ -343,7 +343,7 @@ if arquivo_planilha is not None:
                      if busca in r["num_notif"] or busca in r["nome_paciente"].upper()]
     
     registros.sort(key=lambda r: chave_numerica(r["num_notif"]), reverse=(ordem == "Maior para o Menor"))
-    # ============================================================
+       # ============================================================
     # 📊 ABA: ESTATÍSTICAS E RANKING DE SETORES
     # ============================================================
     st.markdown("---")
@@ -389,4 +389,29 @@ if arquivo_planilha is not None:
         quantidades = [item[1] for item in top_setores]
         
         st.bar_chart(
-            data=
+            data=pd.DataFrame({"Notificações": quantidades}, index=nomes),
+            use_container_width=True
+        )
+    
+    # ============================================================
+    # 📋 LISTA DE NOTIFICAÇÕES
+    # ============================================================
+    st.markdown("---")
+    st.header("📋 Lista de Notificações")
+    
+    if not registros:
+        st.warning("Nenhum registro encontrado com os filtros selecionados.")
+    else:
+        for registro in registros:
+            with st.expander(f"📋 Notificação Nº {registro['num_notif']} — {registro['nome_paciente']}"):
+                st.markdown(f"""
+                **📍 Local:** {registro['local'] or 'N/A'} | **🏥 Leito:** {registro['leito'] or 'N/A'}  
+                **⚠️ Tipo:** {registro['tipo_incidente'] or 'N/A'} | **📊 Classificação:** {registro['classificacao'] or 'N/A'}  
+                **📝 Sugestão:** {registro['sugestao'] or 'N/A'}
+                """)
+                
+                if not registro["memorandos"]:
+                    st.warning("Sem memorandos vinculados")
+                else:
+                    for memo in registro["memorandos"]:
+                        exibir_memorando(registro, memo, data_emissao_atual)
