@@ -19,9 +19,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# 🆕 FUNÇÃO INTELIGENTE DE MONTAGEM DO DESTINATÁRIO
-# ============================================================
 def montar_destinatario(gestor_col, setor_col):
     def tratar_texto(t):
         if not t or str(t).strip() == "":
@@ -48,7 +45,7 @@ def montar_destinatario(gestor_col, setor_col):
     
     palavras_g = set(g.replace(" DE ", " ").replace(" DA ", " ").replace(" DO ", " ").split())
     palavras_s = s.split()
-    if palavras_s and palavras_s[0] in palavras_g:
+    if len(palavras_s) > 0 and palavras_s[0] in palavras_g:
         s_limpo = " ".join(palavras_s[1:]).strip()
         if s_limpo:
             return f"{g} - {s_limpo}"
@@ -56,16 +53,7 @@ def montar_destinatario(gestor_col, setor_col):
     
     return f"{g} - {s}"
 
-# ============================================================
-# ✅ FUNÇÃO CORRIGIDA: Preserva N/A
-# ============================================================
 def limpar_valor(valor):
-    """
-    Limpa o valor mas PRESERVA N/A explicitamente
-    - Se for vazio/nan → retorna "" (vazio)
-    - Se for N/A (qualquer capitalização) → retorna "N/A"
-    - Caso contrário → retorna o texto limpo
-    """
     if pd.isna(valor):
         return ""
     texto = str(valor).strip()
@@ -188,7 +176,7 @@ def processar_linha(index, linha, num_colunas, data_atual):
         "nome_paciente": nome_paciente,
         "leito": limpar_valor(col(10)),
         "setor_origem": limpar_valor(col(11)),
-        "sugestao": limpar_valor(col(12)),  # ✅ Agora preserva N/A
+        "sugestao": limpar_valor(col(12)),
         "memorandos": extrair_memorandos_da_linha(linha, num_colunas)
     }
     return status, dados, len(dados["memorandos"])
@@ -207,10 +195,9 @@ def gerar_memorando(dados_principais, dados_memo, data_emissao):
         dados_memo["setor_notificado"]
     )
     
-    # ✅ Garante que se for vazio, não apaga o rótulo no modelo
     sugestao_final = dados_principais["sugestao"]
     if not sugestao_final:
-        sugestao_final = "N/A"  # Valor padrão se estiver realmente vazio
+        sugestao_final = "N/A"
     
     substituicoes = {
         "NUMERO_MEMO": dados_memo["numero_memo"],
@@ -230,17 +217,15 @@ def gerar_memorando(dados_principais, dados_memo, data_emissao):
         "PACIENTE": dados_principais["nome_paciente"],
         "LEITO": dados_principais["leito"] or "N/A",
         "SETOR_NOTIFICANTE": dados_principais["setor_origem"] or "N/A",
-        "SUGESTAO": sugestao_final  # ✅ Preserva N/A da planilha
+        "SUGESTAO": sugestao_final
     }
     
     substituir_texto_protegido(doc, substituicoes)
     
-    # ✅ Remove barras (/ ou \) do nome do arquivo para evitar FileNotFoundError
     notif_limpo = str(dados_principais['num_notif']).replace("/", "-").replace("\\", "-")
     memo_limpo = str(dados_memo['numero_memo']).replace("/", "-").replace("\\", "-")
     nome_arquivo = f"NOTIF_N{notif_limpo}_MEMO_N{memo_limpo}-{data_emissao.year}.docx"
     
-    # ✅ Salva direto em memória usando BytesIO
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -262,3 +247,24 @@ def exibir_memorando(dados_principais, dados_memo, data_emissao):
 - **Sugestão:** {dados_principais['sugestao'] or 'N/A'}
     """)
     
+    col1, col2 = st.columns(2)
+    with col1:
+        docx_bytes, nome_docx = gerar_memorando(dados_principais, dados_memo, data_emissao)
+        if docx_bytes:
+            st.download_button(
+                label="📄 Baixar DOCX",
+                data=docx_bytes,
+                file_name=nome_docx,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key=f"docx_{dados_principais['index']}_{dados_memo['numero_memo']}"
+            )
+        else:
+            st.error(nome_docx)
+            
+    with col2:
+        pdf_bytes = converter_docx_para_pdf(docx_bytes) if docx_bytes else None
+        if pdf_bytes:
+            nome_pdf = nome_docx.replace(".docx", ".pdf")
+            st.download_button(
+                label="📕 Baixar PDF",
+                data=pdf_bytes,
