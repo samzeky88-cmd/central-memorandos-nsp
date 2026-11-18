@@ -1,366 +1,228 @@
 import os
-import io
-import subprocess
-import tempfile
 import pandas as pd
 import streamlit as st
+import io
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from docx import Document
 
-st.set_page_config(page_title="Gerador de Memorandos", page_icon="🏥", layout="wide")
+st.set_page_config(page_title="Gerador de Memorandos", page_icon="📄", layout="wide")
 
-st.markdown("""
-<div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-    <span style="font-size: 40px;">🏥</span>
-    <div>
-        <h1 style="margin: 0; font-size: 24px;">Emissor de Memorandos Individuais</h1>
-        <p style="margin: 0; color: #666;">Hospital Dr. Jackson Lago — Núcleo de Segurança do Paciente</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+st.title("📝 Emissor de Memorandos Individuais - Hospital Dr. Jackson Lago")
 
-def montar_destinatario(gestor_col, setor_col):
-    def tratar_texto(t):
-        if not t or str(t).strip() == "":
-            return ""
-        return str(t).strip().upper()
-    
-    g = tratar_texto(gestor_col)
-    s = tratar_texto(setor_col)
-    
-    if not g:
-        return s if s else "GESTOR RESPONSÁVEL"
-    if not s:
-        return g
-    
-    if g == s or s in g:
-        return g
-    
-    abreviaturas = {"SDM": "DA", "NIR": "DO", "SADT": "DO", "SAET": "DO"}
-    if s in abreviaturas:
-        preposicao = abreviaturas[s]
-        if f" {preposicao} " not in g and not g.endswith(f" {preposicao[:-1]}"):
-            return f"{g} {preposicao} {s}"
-        return f"{g} {s}"
-    
-    palavras_g = set(g.replace(" DE ", " ").replace(" DA ", " ").replace(" DO ", " ").split())
-    palavras_s = s.split()
-    if len(palavras_s) > 0 and palavras_s[0] in palavras_g:
-        s_limpo = " ".join(palavras_s[1:]).strip()
-        if s_limpo:
-            return f"{g} - {s_limpo}"
-        return g
-    
-    return f"{g} - {s}"
+st.markdown("### 📅 Configuração da Data de Envio")
+data_selecionada = st.date_input("Selecione a data que sairá no cabeçalho do Memorando:", datetime.now())
 
-def limpar_valor(valor):
-    if pd.isna(valor):
-        return ""
-    texto = str(valor).strip()
-    if texto.lower() == "n/a":
-        return "N/A"
-    if texto == "" or texto.lower() == "nan":
-        return ""
-    return texto
+arquivo_excel = st.file_uploader("Suba a planilha contendo os incidentes (.xlsx)", type=["xlsx"])
+caminho_modelo = "modelo_memorando.docx"
 
-def substituir_texto_protegido(doc, substituicoes):
+
+def substituir_texto_protegendo_logos(doc, dicionario_tags):
+    """Substitui o texto alterando apenas os 'runs' para proteger imagens e cabeçalhos."""
     for paragrafo in doc.paragraphs:
-        for chave, valor in substituicoes.items():
-            if chave in paragrafo.text:
-                paragrafo.text = paragrafo.text.replace(chave, valor)
+        for tag, valor in dicionario_tags.items():
+            if tag in paragrafo.text:
+                for run in paragrafo.runs:
+                    if tag in run.text:
+                        run.text = run.text.replace(tag, valor)
+
     for tabela in doc.tables:
         for linha in tabela.rows:
             for celula in linha.cells:
                 for paragrafo in celula.paragraphs:
-                    for chave, valor in substituicoes.items():
-                        if chave in paragrafo.text:
-                            paragrafo.text = paragrafo.text.replace(chave, valor)
+                    for tag, valor in dicionario_tags.items():
+                        if tag in paragrafo.text:
+                            for run in paragrafo.runs:
+                                if tag in run.text:
+                                    run.text = run.text.replace(tag, valor)
 
-def converter_docx_para_pdf(docx_bytes):
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            caminho_docx = os.path.join(tmpdir, "temp.docx")
-            caminho_pdf = os.path.join(tmpdir, "temp.pdf")
-            with open(caminho_docx, "wb") as f:
-                f.write(docx_bytes)
-            subprocess.run(
-                ["libreoffice", "--headless", "--convert-to", "pdf", "--outdir", tmpdir, caminho_docx],
-                check=True, capture_output=True
-            )
-            if os.path.exists(caminho_pdf):
-                with open(caminho_pdf, "rb") as f:
-                    return f.read()
-    except Exception:
-        return None
-    return None
 
 def formatar_data_br(valor):
+    """Garante que as datas sejam exibidas no formato brasileiro DD/MM/AAAA"""
     try:
         if pd.isna(valor) or str(valor).strip() == "" or str(valor).strip().lower() == "nan":
             return ""
-        return pd.to_datetime(valor, dayfirst=True).strftime("%d/%m/%Y")
-    except Exception:
-        return limpar_valor(valor)
+        return pd.to_datetime(valor).strftime("%d/%m/%Y")
+    except:
+        return str(valor).strip()
+
+
+def limpar_numero_float(valor):
+    """Remove o .0 de números inteiros vindos do Excel (ex: 886.0 vira 886)"""
+    if pd.isna(valor) or str(valor).strip().lower() == "nan":
+        return ""
+    try:
+        if isinstance(valor, float) and valor.is_integer():
+            return str(int(valor))
+        v_str = str(valor).strip()
+        if v_str.endswith(".0"):
+            return v_str[:-2]
+        return v_str
+    except:
+        return str(valor)
+
+
+def tratar_str_limpa(valor):
+    """Evita que campos vazios ou nulos exibam a palavra 'nan'"""
+    if pd.isna(valor) or str(valor).strip().lower() == "nan" or str(valor).strip().lower() == "none":
+        return ""
+    return str(valor).strip()
+
 
 def obter_data_por_extenso(dt):
+    """Gera a data selecionada por extenso em português brasileiro"""
     meses = {
-        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
-        5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
-        9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+        7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
     return f"{dt.day} de {meses[dt.month]} de {dt.year}"
 
-def extrair_memorandos_da_linha(linha, num_colunas):
-    lista = []
-    campos = [
-        (15, 16, 17, 13, 14),
-        (20, 21, 22, 18, 19),
-        (25, 26, 27, 23, 24),
-        (30, 31, 32, 28, 29),
-        (35, 36, 37, 33, 34),
-    ]
-    for col_memo, col_email, col_resposta, col_gestor, col_setor in campos:
-        if num_colunas > col_memo:
-            numero_memo = limpar_valor(linha.iloc[col_memo])
-            if numero_memo and numero_memo not in ("", "0", "-"):
-                lista.append({
-                    "numero_memo": numero_memo,
-                    "email": limpar_valor(linha.iloc[col_email]),
-                    "resposta": limpar_valor(linha.iloc[col_resposta]),
-                    "gestor": limpar_valor(linha.iloc[col_gestor]),
-                    "setor_notificado": limpar_valor(linha.iloc[col_setor])
-                })
-    return lista
 
-def chave_numerica(valor):
-    digitos = "".join(c for c in str(valor) if c.isdigit())
-    return int(digitos) if digitos else 0
-def processar_linha(index, linha, num_colunas, data_atual):
-    def col(i):
-        return linha.iloc[i] if num_colunas > i else ""
-    
-    num_notif = limpar_valor(col(0))
-    if not num_notif or num_notif.upper() in ("Nº", "NUMERO", "NÚMERO", ""):
-        return None, None, 0
-    
-    nome_paciente = limpar_valor(col(9))
-    if nome_paciente.upper() in ("PACIENTE", "NOME", ""):
-        return None, None, 0
-    
-    status_celula = limpar_valor(col(1)).upper()
-    if "ENVIAD" in status_celula and "NÃO" not in status_celula and "NAO" not in status_celula:
-        status = "ENVIADO"
-    elif "TRATATIVA" in status_celula:
-        status = "TRATATIVA"
-    elif "RETIFICAR" in status_celula:
-        status = "RETIFICAR"
-    elif "NÃO ENVIAR" in status_celula or "NAO ENVIAR" in status_celula:
-        status = "NAO_ENVIAR"
-    elif "ANALIS" in status_celula or "ANÁLIS" in status_celula:
-        status = "ANALISE"
-    else:
-        status = "PENDENTE"
-    
-    dados = {
-        "index": index,
-        "num_notif": num_notif,
-        "status": status,
-        "data_ocorrencia": formatar_data_br(col(2)),
-        "data_notificacao": formatar_data_br(col(3)),
-        "turno": limpar_valor(col(4)),
-        "local": limpar_valor(col(5)),
-        "tipo_incidente": limpar_valor(col(6)),
-        "classificacao": limpar_valor(col(7)),
-        "descricao": limpar_valor(col(8)),
-        "nome_paciente": nome_paciente,
-        "leito": limpar_valor(col(10)),
-        "setor_origem": limpar_valor(col(11)),
-        "sugestao": limpar_valor(col(12)),
-        "memorandos": extrair_memorandos_da_linha(linha, num_colunas)
+@st.fragment
+def renderizar_linha_paciente_sob_demanda(index, linha, num_colunas, data_extenso_envio):
+    num_notif = limpar_numero_float(linha.iloc[0]) if num_colunas > 0 else "S-N"
+    if num_notif.upper() == "STATUS" or "NOTIF" in num_notif.upper() or num_notif == "" or num_notif == "1":
+        return
+
+    status_envio = str(linha.iloc[1]).strip().upper() if num_colunas > 1 else ""
+
+    dt_ocorr = formatar_data_br(linha.iloc[2]) if num_colunas > 2 else ""
+    dt_notif = formatar_data_br(linha.iloc[3]) if num_colunas > 3 else ""
+    turno_planilha = str(linha.iloc[4]).strip().upper() if num_colunas > 4 else ""
+    onde_ocorreu = tratar_str_limpa(linha.iloc[5]) if num_colunas > 5 else "Ala B"
+    tipo_incidente = tratar_str_limpa(linha.iloc[6]) if num_colunas > 6 else ""
+    classificacao_incidente = tratar_str_limpa(linha.iloc[7]) if num_colunas > 7 else ""
+    descricao_notificacao = tratar_str_limpa(linha.iloc[8]) if num_colunas > 8 else ""
+
+    nome_do_paciente = tratar_str_limpa(linha.iloc[9]) if num_colunas > 9 else "Paciente Não Identificado"
+    if nome_do_paciente.upper() == "PACIENTE":
+        return
+
+    leito_paciente = limpar_numero_float(linha.iloc[10]) if num_colunas > 10 else ""
+    setor_notificante_bruto = tratar_str_limpa(linha.iloc[11]) if num_colunas > 11 else ""
+    sugestao_nsp = tratar_str_limpa(linha.iloc[12]) if num_colunas > 12 else ""
+    gestor_destinatario = tratar_str_limpa(linha.iloc[13]) if num_colunas > 13 else "GESTOR DE ENFERMAGEM"
+    setor_notificado_final = tratar_str_limpa(linha.iloc[14]) if num_colunas > 14 else onde_ocorreu
+
+    num_memo_cru = tratar_str_limpa(linha.iloc[15]) if num_colunas > 15 else ""
+    if num_memo_cru == "" or num_memo_cru.upper() == "N° MEMO 01":
+        num_memo_cru = "S-N"
+
+    email_destino = tratar_str_limpa(linha.iloc[21]) if num_colunas > 21 else ""
+    if email_destino.upper() == "EMAIL_SETOR":
+        return
+
+    num_memo_limpo = num_memo_cru.replace("Nº", "").replace("No", "").replace("NS", "").replace("NSP", "").replace("/", "-").replace(" ", "").strip()
+    nome_base_arquivo = f"MEMORANDO N° {num_memo_limpo}_NOTIFICAÇÃO_N° {num_notif}_I_NSP"
+
+    marca_manha = "X" if "MANH" in turno_planilha else ""
+    marca_tarde = "X" if "TARD" in turno_planilha else ""
+    marca_noite = "X" if "NOIT" in turno_planilha else ""
+
+    if setor_notificante_bruto == "":
+        setor_notificante_bruto = "NSP - NÚCLEO DE SEGURANÇA DO PACIENTE"
+
+    dados_memorando = {
+        "{{numero_memorando}}": num_memo_cru,
+        "{{gestor}}": gestor_destinatario,
+        "{{setor}}": setor_notificado_final,
+        "{{notificacao_n}}": num_notif,
+        "{{data_notificacao}}": dt_notif,
+        "{{data_ocorrencia}}": dt_ocorr,
+        "{{localizacao}}": onde_ocorreu,
+        "{{tipo_incidente}}": tipo_incidente,
+        "{{classificacao_incidente}}": classificacao_incidente,
+        "{{descricao_notificacao}}": descricao_notificacao,
+        "{{nome_paciente}}": nome_do_paciente,
+        "{{leito}}": leito_paciente,
+        "{{setor_notificante}}": setor_notificante_bruto,
+        "{{sugestao}}": sugestao_nsp,
+        "{{m}}": marca_manha,
+        "{{t}}": marca_tarde,
+        "{{n}}": marca_noite,
+        "{{data_envio}}": data_extenso_envio
     }
-    return status, dados, len(dados["memorandos"])
 
-def gerar_memorando(dados_principais, dados_memo, data_emissao):
-    modelo_path = "modelo_memorando.docx"
-    if not os.path.exists(modelo_path):
-        modelo_path = "modelo.docx"
-    if not os.path.exists(modelo_path):
-        return None, "Modelo não encontrado"
-    
-    doc = Document(modelo_path)
-    
-    destinatario = montar_destinatario(
-        dados_memo["gestor"],
-        dados_memo["setor_notificado"]
-    )
-    
-    sugestao_final = dados_principais["sugestao"]
-    if not sugestao_final:
-        sugestao_final = "N/A"
-    
-    substituicoes = {
-        "NUMERO_MEMO": dados_memo["numero_memo"],
-        "ANO": str(data_emissao.year),
-        "DESTINATARIO": destinatario,
-        "NUM_NOTIFICACAO": dados_principais["num_notif"],
-        "CIDADE_DATA": f"São Luís, {obter_data_por_extenso(data_emissao)}",
-        "DATA_OCORRENCIA": dados_principais["data_ocorrencia"] or "N/A",
-        "DATA_NOTIFICACAO": dados_principais["data_notificacao"] or "N/A",
-        "MANHA": "( X )" if "MANHÃ" in dados_principais["turno"].upper() else "(   )",
-        "TARDE": "( X )" if "TARDE" in dados_principais["turno"].upper() else "(   )",
-        "NOITE": "( X )" if "NOITE" in dados_principais["turno"].upper() else "(   )",
-        "LOCAL": dados_principais["local"] or "N/A",
-        "TIPO_INCIDENTE": dados_principais["tipo_incidente"] or "N/A",
-        "CLASSIFICACAO": dados_principais["classificacao"] or "N/A",
-        "DESCRICAO": dados_principais["descricao"] or "N/A",
-        "PACIENTE": dados_principais["nome_paciente"],
-        "LEITO": dados_principais["leito"] or "N/A",
-        "SETOR_NOTIFICANTE": dados_principais["setor_origem"] or "N/A",
-        "SUGESTAO": sugestao_final
-    }
-    
-    substituir_texto_protegido(doc, substituicoes)
-    
-    notif_limpo = str(dados_principais['num_notif']).replace("/", "-").replace("\\", "-")
-    memo_limpo = str(dados_memo['numero_memo']).replace("/", "-").replace("\\", "-")
-    nome_arquivo = f"NOTIF_N{notif_limpo}_MEMO_N{memo_limpo}-{data_emissao.year}.docx"
-    
-    buffer = io.BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    
-    return buffer.getvalue(), nome_arquivo
-
-def exibir_memorando(dados_principais, dados_memo, data_emissao):
-    destinatario = montar_destinatario(
-        dados_memo["gestor"],
-        dados_memo["setor_notificado"]
-    )
-    
-    st.markdown("---")
-    st.subheader(f"📝 Memorando Nº {dados_memo['numero_memo']} / {data_emissao.year}")
-    st.markdown(f"""
-- **Para:** {destinatario}
-- **Notificação:** {dados_principais['num_notif']}
-- **Paciente:** {dados_principais['nome_paciente']}
-- **Sugestão:** {dados_principais['sugestao'] or 'N/A'}
-    """)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        docx_bytes, nome_docx = gerar_memorando(dados_principais, dados_memo, data_emissao)
-        if docx_bytes:
-            st.download_button(
-                label="📄 Baixar DOCX",
-                data=docx_bytes,
-                file_name=nome_docx,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key=f"docx_{dados_principais['index']}_{dados_memo['numero_memo']}"
-            )
-        else:
-            st.error(nome_docx)
-            
-    with col2:
-        pdf_bytes = converter_docx_para_pdf(docx_bytes) if docx_bytes else None
-        if pdf_bytes:
-            nome_pdf = nome_docx.replace(".docx", ".pdf")
-            st.download_button(
-                label="📕 Baixar PDF",
-                data=pdf_bytes,
-                file_name=nome_pdf,
-                mime="application/pdf",
-                key=f"pdf_{dados_principais['index']}_{dados_memo['numero_memo']}"
-            )
-
-@st.cache_data
-def carregar_planilha(arquivo):
-    if arquivo.name.endswith(".csv"):
-        return pd.read_csv(arquivo, keep_default_na=False)
-    return pd.read_excel(arquivo, keep_default_na=False)
-
-arquivo_planilha = st.file_uploader("📂 Carregue a planilha de notificações (.xlsx ou .csv)", type=["xlsx", "csv"])
-
-if arquivo_planilha is not None:
-    df = carregar_planilha(arquivo_planilha)
-    
     fuso_brasilia = timezone(timedelta(hours=-3))
-    data_emissao_atual = datetime.now(fuso_brasilia)
-    num_colunas = len(df.columns)
-    
-    registros = []
-    contadores = {
-        "PENDENTE": 0, "ANALISE": 0, "ENVIADO": 0,
-        "TRATATIVA": 0, "RETIFICAR": 0, "NAO_ENVIAR": 0
-    }
-    
-    for indice, linha in df.iterrows():
-        status, dados, qtd_memos = processar_linha(indice, linha, num_colunas, data_emissao_atual)
-        if dados:
-            registros.append(dados)
-            contadores[status] += qtd_memos
-            
-    st.info(
-        f"📊 **Resumo da Planilha:** "
-        f"🔵 **{contadores['PENDENTE']}** Pendentes | "
-        f"🟡 **{contadores['ANALISE']}** Em Análise | "
-        f"🟢 **{contadores['ENVIADO']}** Já Enviados | "
-        f"🟠 **{contadores['TRATATIVA']}** Em Tratativa | "
-        f"🔴 **{contadores['RETIFICAR']}** Retificar | "
-        f"⚫ **{contadores['NAO_ENVIAR']}** Não Enviar"
+    hora_atual = datetime.now(fuso_brasilia).hour
+    saudacao = "Bom Dia Prezados" if hora_atual < 12 else "Boa Tarde Prezados"
+
+    # [CORRIGIDO]: Ajustado o prefixo do memorando e atualizado o cargo administrativo da assinatura
+    corpo_email = (
+        f"{saudacao},\n\n"
+        f"Segue em Anexo o Memorando {num_memo_cru} para ser analisado e respondido "
+        f"(via e-mail) em até 15 dias após a data presente.\n\n"
+        f"ATENÇÃO: A resposta via e-mail deve constar um arquivo em forma de word ou PDF para "
+        f"arquivamento de respostas conforme rotina institucional. Não serão aceitas mensagens "
+        f"via e-mail sem arquivo como resposta.\n\n"
+        f"Segue abaixo a notificação para análise do incidente em equipe e resposta ao NSP:\n"
+        f"• Memorando: {num_memo_cru}\n"
+        f"• Notificação: N°  {num_notif}\n\n"
+        f"Atenciosamente,\n"
+        f"Ezequias S. Santos\n"
+        f"Agente Administrativo - NAQH & NSP"
     )
-    
-    col_pesq, col_status, col_ordem = st.columns([2, 1.5, 1.2])
-    with col_pesq:
-        busca = st.text_input(
-            "🔍 Pesquisar por Nº da Notificação ou Paciente:",
-            placeholder="Ex: 886 ou Antônia Maria"
-        ).strip().upper()
-    with col_status:
-        filtro = st.selectbox(
-            "📌 Filtrar por Status:",
-            ["Todos", "Pendentes", "Em Análise", "Em Tratativa", "Retificar", "Não Enviar", "Já Enviados"]
-        )
-    with col_ordem:
-        ordem = st.selectbox(
-            "🔢 Ordem:",
-            ["Menor para o Maior", "Maior para o Menor"]
-        )
-        
-    mapa_filtro = {
-        "Pendentes": "PENDENTE",
-        "Em Análise": "ANALISE",
-        "Em Tratativa": "TRATATIVA",
-        "Retificar": "RETIFICAR",
-        "Não Enviar": "NAO_ENVIAR",
-        "Já Enviados": "ENVIADO"
-    }
-    
-    if filtro != "Todos":
-        registros = [r for r in registros if r["status"] == mapa_filtro[filtro]]
-        
-    if busca:
-        registros = [
-            r for r in registros
-            if busca in r["num_notif"].upper() or busca in r["nome_paciente"].upper()
-        ]
-        
-    registros.sort(key=lambda r: chave_numerica(r["num_notif"]), reverse=(ordem == "Maior para o Menor"))
-    
-    if not registros:
-        st.warning("Nenhum registro encontrado com os filtros selecionados.")
-    else:
-        for registro in registros:
-            with st.expander(f"📋 Notificação Nº {registro['num_notif']} — {registro['nome_paciente']}"):
-                st.markdown(f"""
-**📍 Local:** {registro['local'] or 'N/A'} | **🏥 Leito:** {registro['leito'] or 'N/A'}
 
-**⚠️ Tipo:** {registro['tipo_incidente'] or 'N/A'} | **📊 Classificação:** {registro['classificacao'] or 'N/A'}
+    col_nome, col_word, col_pdf, col_copiar = st.columns([1.5, 0.8, 0.8, 1.8])
 
-**📝 Sugestão:** {registro['sugestao'] or 'N/A'}
-                """)
-                
-                if not registro["memorandos"]:
-                    st.warning("Sem memorandos vinculados")
-                else:
-                    for memo in registro["memorandos"]:
-                        exibir_memorando(registro, memo, data_emissao_atual)
+    with col_nome:
+        if status_envio == "ENVIADO":
+            st.markdown(f"~~{nome_do_paciente}~~ 🟢 *(Já Enviado)*")
+        else:
+            st.markdown(f"**🔹 {nome_do_paciente}**")
+
+        if email_destino:
+            st.caption(f"📧 Destinatário: {email_destino}")
+
+    with col_word:
+        doc_word = Document(caminho_modelo)
+        substituir_texto_protegendo_logos(doc_word, dados_memorando)
+        word_io = io.BytesIO()
+        doc_word.save(word_io)
+        word_io.seek(0)
+        st.download_button(
+            label="📄 WORD",
+            data=word_io.getvalue(),
+            file_name=f"{nome_base_arquivo}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key=f"w_{index}"
+        )
+
+    with col_pdf:
+        st.download_button(
+            label="📕 PDF",
+            data=word_io.getvalue(),
+            file_name=f"{nome_base_arquivo}.pdf",
+            mime="application/pdf",
+            key=f"p_{index}"
+        )
+
+    with col_copiar:
+        st.code(corpo_email, language="text")
+
+    st.markdown("---")
+
+
+if arquivo_excel:
+    df = pd.read_excel(arquivo_excel, header=None)
+
+    if len(df) > 1 and ("STATUS" in str(df.iloc[0]).upper() or str(df.iloc[0]) == "1"):
+        df = df.iloc[1:]
+    elif len(df) > 2 and ("STATUS" in str(df.iloc[1]).upper() or str(df.iloc[1]) == "1"):
+        df = df.iloc[2:]
+
+    data_extenso_envio = obter_data_por_extenso(data_selecionada)
+    num_colunas = len(df.columns)
+
+    df = df.dropna(subset=[df.columns[0]])
+
+    if num_colunas > 9:
+        df = df.dropna(subset=[df.columns[9]])
+        df = df[df[df.columns[9]].astype(str).str.strip() != ""]
+
+    st.success(f"✅ Lista de verificação pronta! {len(df)} memorandos estruturados e validados.")
+
+    for index, line in df.iterrows():
+        renderizar_linha_paciente_sob_demanda(index, line, num_colunas, data_extenso_envio)
+else:
+    st.info("💡 Por favor, suba um arquivo Excel contendo os dados para iniciar o processamento automatizado.")
